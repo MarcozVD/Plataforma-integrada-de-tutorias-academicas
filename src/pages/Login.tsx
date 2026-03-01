@@ -3,24 +3,53 @@ import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Mail, Lock, LogIn } from "lucide-react";
+import { Lock, LogIn, School } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    // Simular delay de login
-    setTimeout(() => {
-      setIsLoading(false);
-      // Redirigir a home sin autenticación real
+    setError("");
+
+    try {
+      const response = await fetch("/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          student_id: studentId,
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Credenciales inválidas");
+      }
+
+      // Guardar token en localStorage
+      localStorage.setItem("token", data.access_token);
+      localStorage.setItem("studentId", studentId);
+      localStorage.setItem("userType", data.user_type);
+      localStorage.setItem("fullName", data.full_name);
+      localStorage.setItem("carrera", data.carrera || "");
+
+      // Redirigir al home
       navigate("/");
-    }, 1000);
+    } catch (err: any) {
+      console.error("Error en login:", err);
+      setError(err.message || "Error al conectar con el servidor");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -48,18 +77,25 @@ const Login = () => {
 
           <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Email */}
+              {/* Error global */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                  {error}
+                </div>
+              )}
+
+              {/* Student ID */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Correo electrónico
+                  Número de estudiante
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <School className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                   <Input
-                    type="email"
-                    placeholder="tu@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    type="text"
+                    placeholder="U00123456"
+                    value={studentId}
+                    onChange={(e) => setStudentId(e.target.value)}
                     className="pl-10"
                     required
                   />

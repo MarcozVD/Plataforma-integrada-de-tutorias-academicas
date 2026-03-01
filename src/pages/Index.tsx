@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Search, Filter, SlidersHorizontal, BookOpen, Building2, Sparkles } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Search, SlidersHorizontal, BookOpen, Building2, Sparkles } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,20 +15,95 @@ import { rooms, tutorings } from "@/data/mockData";
 const Index = () => {
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [accessFilters, setAccessFilters] = useState({ wheelchair: false, visual: false, hearing: false });
-
-  const filteredRooms = rooms.filter((r) => {
-    const matchSearch = r.name.toLowerCase().includes(search.toLowerCase()) || r.building.toLowerCase().includes(search.toLowerCase());
-    const matchAccess =
-      (!accessFilters.wheelchair || r.accessibility.wheelchair) &&
-      (!accessFilters.visual || r.accessibility.visualSupport) &&
-      (!accessFilters.hearing || r.accessibility.hearingSupport);
-    return matchSearch && matchAccess;
+  
+  // filtros de tutorías
+  const [subjectFilter, setSubjectFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("");
+  const [timeFilter, setTimeFilter] = useState<string>("");
+  const [accessFilters, setAccessFilters] = useState({ 
+    wheelchair: false, 
+    visual: false, 
+    hearing: false 
   });
 
-  const filteredTutorings = tutorings.filter(
-    (t) => t.subject.toLowerCase().includes(search.toLowerCase()) || t.tutor.toLowerCase().includes(search.toLowerCase())
-  );
+  // filtros de salones
+  const [onlyAvailableRooms, setOnlyAvailableRooms] = useState(false);
+
+  // Filtrar tutorías
+  const filteredTutorings = useMemo(() => {
+    return tutorings.filter((t) => {
+      // Filtro por búsqueda
+      const matchSearch = 
+        t.subject.toLowerCase().includes(search.toLowerCase()) || 
+        t.tutor.toLowerCase().includes(search.toLowerCase()) ||
+        t.room.toLowerCase().includes(search.toLowerCase());
+      
+      // Filtro por materia
+      const matchSubject = subjectFilter === "all" || 
+        t.subject.toLowerCase().includes(subjectFilter.toLowerCase());
+      
+      // Filtro por fecha
+      const matchDate = !dateFilter || t.date === dateFilter;
+      
+      // Filtro por hora
+      let matchTime = true;
+      if (timeFilter) {
+        const [filterHour] = timeFilter.split(":").map(Number);
+        const [tutHour] = t.time.split(":").map(Number);
+        matchTime = tutHour === filterHour;
+      }
+      
+      // Filtro por accesibilidad
+      const matchAccess = 
+        (!accessFilters.wheelchair || t.accessibility.includes("Silla de ruedas")) &&
+        (!accessFilters.visual || t.accessibility.includes("Apoyo visual")) &&
+        (!accessFilters.hearing || t.accessibility.includes("Apoyo auditivo"));
+
+      return matchSearch && matchSubject && matchDate && matchTime && matchAccess;
+    });
+  }, [search, subjectFilter, dateFilter, timeFilter, accessFilters]);
+
+  // Filtrar salones
+  const filteredRooms = useMemo(() => {
+    return rooms.filter((r) => {
+      // Filtro por búsqueda
+      const matchSearch = 
+        r.name.toLowerCase().includes(search.toLowerCase()) || 
+        r.building.toLowerCase().includes(search.toLowerCase());
+      
+      // Filtro por disponibilidad
+      const matchAvailable = !onlyAvailableRooms || r.available;
+      
+      // Filtro por accesibilidad
+      const matchAccess =
+        (!accessFilters.wheelchair || r.accessibility.wheelchair) &&
+        (!accessFilters.visual || r.accessibility.visualSupport) &&
+        (!accessFilters.hearing || r.accessibility.hearingSupport);
+
+      return matchSearch && matchAvailable && matchAccess;
+    });
+  }, [search, onlyAvailableRooms, accessFilters]);
+
+  // Limpiar filtros
+  const clearFilters = () => {
+    setSearch("");
+    setSubjectFilter("all");
+    setDateFilter("");
+    setTimeFilter("");
+    setAccessFilters({ wheelchair: false, visual: false, hearing: false });
+    setOnlyAvailableRooms(false);
+  };
+
+  // Contador de filtros activos
+  const activeFiltersCount = [
+    subjectFilter !== "all",
+    dateFilter !== "",
+    timeFilter !== "",
+    accessFilters.wheelchair,
+    accessFilters.visual,
+    accessFilters.hearing,
+    onlyAvailableRooms
+  ].filter(Boolean).length;
 
   return (
     <main className="container mx-auto px-4 py-6 max-w-6xl">
@@ -54,7 +129,7 @@ const Index = () => {
             />
           </div>
           <Button
-            variant="outline"
+            variant={filtersOpen ? "default" : "outline"}
             size="icon"
             className="h-12 w-12 shrink-0"
             onClick={() => setFiltersOpen(!filtersOpen)}
@@ -67,46 +142,98 @@ const Index = () => {
 
         {/* Filters */}
         {filtersOpen && (
-          <div className="bg-card rounded-lg border p-4 mb-4 grid sm:grid-cols-2 md:grid-cols-4 gap-4" role="region" aria-label="Filtros avanzados">
-            <div>
-              <Label className="text-xs font-medium mb-1.5 block">Materia</Label>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  <SelectItem value="calculo">Cálculo I</SelectItem>
-                  <SelectItem value="prog">Programación II</SelectItem>
-                  <SelectItem value="algebra">Álgebra Lineal</SelectItem>
-                  <SelectItem value="fisica">Física II</SelectItem>
-                  <SelectItem value="estadistica">Estadística</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs font-medium mb-1.5 block">Fecha</Label>
-              <Input type="date" className="bg-card" />
-            </div>
-            <div>
-              <Label className="text-xs font-medium mb-1.5 block">Hora</Label>
-              <Input type="time" className="bg-card" />
-            </div>
-            <div>
-              <Label className="text-xs font-medium mb-2 block">Accesibilidad</Label>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Checkbox id="wheelchair" checked={accessFilters.wheelchair} onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, wheelchair: !!c }))} />
-                  <Label htmlFor="wheelchair" className="text-xs">Silla de ruedas</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="visual" checked={accessFilters.visual} onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, visual: !!c }))} />
-                  <Label htmlFor="visual" className="text-xs">Apoyo visual</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="hearing" checked={accessFilters.hearing} onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, hearing: !!c }))} />
-                  <Label htmlFor="hearing" className="text-xs">Apoyo auditivo</Label>
+          <div className="bg-card rounded-lg border p-4 mb-4" role="region" aria-label="Filtros avanzados">
+            <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Materia */}
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block">Materia</Label>
+                <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                  <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="calculo">Cálculo I</SelectItem>
+                    <SelectItem value="programacion">Programación II</SelectItem>
+                    <SelectItem value="algebra">Álgebra Lineal</SelectItem>
+                    <SelectItem value="fisica">Física II</SelectItem>
+                    <SelectItem value="estadistica">Estadística</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Fecha */}
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block">Fecha</Label>
+                <Input 
+                  type="date" 
+                  value={dateFilter} 
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="bg-card" 
+                />
+              </div>
+
+              {/* Hora */}
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block">Hora</Label>
+                <Input 
+                  type="time" 
+                  value={timeFilter} 
+                  onChange={(e) => setTimeFilter(e.target.value)}
+                  className="bg-card" 
+                />
+              </div>
+
+              {/* Accesibilidad */}
+              <div>
+                <Label className="text-xs font-medium mb-2 block">Accesibilidad</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox 
+                      id="wheelchair" 
+                      checked={accessFilters.wheelchair} 
+                      onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, wheelchair: !!c }))} 
+                    />
+                    <Label htmlFor="wheelchair" className="text-xs">Silla de ruedas</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox 
+                      id="visual" 
+                      checked={accessFilters.visual} 
+                      onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, visual: !!c }))} 
+                    />
+                    <Label htmlFor="visual" className="text-xs">Apoyo visual</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox 
+                      id="hearing" 
+                      checked={accessFilters.hearing} 
+                      onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, hearing: !!c }))} 
+                    />
+                    <Label htmlFor="hearing" className="text-xs">Apoyo auditivo</Label>
+                  </div>
                 </div>
               </div>
             </div>
+
+            {/* Filtro solo salones disponibles */}
+            <div className="mt-4 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <Checkbox 
+                  id="onlyAvailable" 
+                  checked={onlyAvailableRooms} 
+                  onCheckedChange={(c) => setOnlyAvailableRooms(!!c)} 
+                />
+                <Label htmlFor="onlyAvailable" className="text-sm">Solo mostrar salones disponibles</Label>
+              </div>
+            </div>
+
+            {/* Botón limpiar filtros */}
+            {activeFiltersCount > 0 && (
+              <div className="mt-4 flex justify-end">
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs">
+                  Limpiar filtros ({activeFiltersCount})
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -152,7 +279,9 @@ const Index = () => {
             ))}
           </div>
           {filteredTutorings.length === 0 && (
-            <p className="text-center text-muted-foreground py-12">No se encontraron tutorías.</p>
+            <p className="text-center text-muted-foreground py-12">
+              No se encontraron tutorías con los filtros seleccionados.
+            </p>
           )}
         </TabsContent>
 
@@ -163,7 +292,9 @@ const Index = () => {
             ))}
           </div>
           {filteredRooms.length === 0 && (
-            <p className="text-center text-muted-foreground py-12">No se encontraron salones.</p>
+            <p className="text-center text-muted-foreground py-12">
+              No se encontraron salones con los filtros seleccionados.
+            </p>
           )}
         </TabsContent>
       </Tabs>

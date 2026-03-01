@@ -1,20 +1,44 @@
-import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Bell, Menu, X, GraduationCap, User } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Bell, Menu, X, GraduationCap, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
-const navItems = [
-  { path: "/", label: "Inicio" },
-  { path: "/rooms", label: "Salones" },
-  { path: "/schedule", label: "Mi Horario" },
-  { path: "/history", label: "Mis Tutorías" },
-  { path: "/tutor", label: "Ser Tutor" },
-];
 
 const Header = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const [userType, setUserType] = useState<string>("");
+
+  useEffect(() => {
+    // Cargar tipo de usuario del localStorage
+    const storedUserType = localStorage.getItem("userType") || "student";
+    setUserType(storedUserType);
+  }, [location.pathname]);
+
+  const handleLogout = () => {
+    localStorage.clear();
+    navigate("/login");
+  };
+
+  // Navegación para estudiantes
+  const studentNavItems = [
+    { path: "/", label: "Inicio" },
+    { path: "/rooms", label: "Salones Disponibles" },
+    { path: "/schedule", label: "Mi Horario" },
+    { path: "/history", label: "Mis Tutorías" },
+  ];
+
+  // Navegación para tutores
+  const tutorNavItems = [
+    { path: "/", label: "Inicio" },
+    { path: "/rooms", label: "Salones" },
+    { path: "/schedule", label: "Horario" },
+    { path: "/tutor", label: "Panel de Tutor" },
+  ];
+
+  // Usar la navegación según el tipo de usuario
+  const navItems = userType === "tutor" ? tutorNavItems : studentNavItems;
 
   return (
     <header className="sticky top-0 z-50 bg-primary text-primary-foreground shadow-lg">
@@ -55,6 +79,15 @@ const Header = () => {
               <User className="h-5 w-5" />
             </Button>
           </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-primary-foreground hover:bg-primary-foreground/10"
+            onClick={handleLogout}
+            aria-label="Cerrar sesión"
+          >
+            <LogOut className="h-5 w-5" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"

@@ -1,9 +1,12 @@
-import { useState, useEffect } from "react";
-import { Clock, Trash2, CheckCircle, AlertCircle } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Clock, Trash2, CheckCircle, AlertCircle, Search, Filter, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { tutorings } from "@/data/mockData";
 
 interface ScheduleBlock {
@@ -18,6 +21,9 @@ const allDays = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"
 const dayIndexMap = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const hoursRange = Array.from({ length: 15 }, (_, i) => `${6 + i}:00`);
 
+// Lista de materias únicas
+const subjects = [...new Set(tutorings.map(t => t.subject))];
+
 const Schedule = () => {
   const [userSchedule, setUserSchedule] = useState<ScheduleBlock[]>([]);
   const [newBlock, setNewBlock] = useState({
@@ -26,8 +32,15 @@ const Schedule = () => {
     startTime: "08:00",
     endTime: "09:00",
   });
+  
+  // Filtros de tutorías
+  const [searchTutoring, setSearchTutoring] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [solapamientos, setSolapamientos] = useState<string[]>([]);
 
+  // Cargar horario del localStorage
   useEffect(() => {
     const saved = localStorage.getItem("userHorario");
     if (saved) {
@@ -39,9 +52,29 @@ const Schedule = () => {
     }
   }, []);
 
+  // Guardar horario en localStorage
   useEffect(() => {
     localStorage.setItem("userHorario", JSON.stringify(userSchedule));
   }, [userSchedule]);
+
+  // Filtrar tutorías
+  const filteredTutorings = useMemo(() => {
+    return tutorings.filter((t) => {
+      // Filtro por búsqueda
+      const matchSearch = 
+        t.subject.toLowerCase().includes(searchTutoring.toLowerCase()) || 
+        t.tutor.toLowerCase().includes(searchTutoring.toLowerCase()) ||
+        t.room.toLowerCase().includes(searchTutoring.toLowerCase());
+      
+      // Filtro por materia
+      const matchSubject = subjectFilter === "all" || t.subject === subjectFilter;
+      
+      // Filtro por fecha
+      const matchDate = !dateFilter || t.date === dateFilter;
+
+      return matchSearch && matchSubject && matchDate;
+    });
+  }, [searchTutoring, subjectFilter, dateFilter]);
 
   const handleAddBlock = () => {
     if (!newBlock.subject.trim()) {
@@ -128,13 +161,18 @@ const Schedule = () => {
     return h * 60 + m;
   };
 
-  const getBlockPosition = (block: ScheduleBlock) => {
-    const start = timeToMinutes(block.startTime);
-    const end = timeToMinutes(block.endTime);
-    const baseStart = 7 * 60;
-    const topPercent = ((start - baseStart) / 720) * 100;
-    const heightPercent = ((end - start) / 720) * 100;
-    return { top: topPercent, height: heightPercent };
+  // Contador de filtros activos
+  const activeFiltersCount = [
+    searchTutoring !== "",
+    subjectFilter !== "all",
+    dateFilter !== "",
+  ].filter(Boolean).length;
+
+  // Limpiar filtros
+  const clearFilters = () => {
+    setSearchTutoring("");
+    setSubjectFilter("all");
+    setDateFilter("");
   };
 
   return (
@@ -289,14 +327,79 @@ const Schedule = () => {
         </CardContent>
       </Card>
 
-      {/* Tutorías y solapamientos */}
+      {/* Tutorías con filtros */}
       <div>
-        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-          <Clock className="h-6 w-6 text-blue-600" />
-          Tutorías disponibles
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Clock className="h-6 w-6 text-blue-600" />
+            Tutorías disponibles
+          </h2>
+          <Button
+            variant={filtersOpen ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className="gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Filtros
+            {activeFiltersCount > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">{activeFiltersCount}</Badge>
+            )}
+          </Button>
+        </div>
+
+        {/* Filtros de tutorías */}
+        {filtersOpen && (
+          <Card className="mb-4">
+            <CardContent className="pt-4">
+              <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
+                {/* Buscar */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar tutoría..."
+                    value={searchTutoring}
+                    onChange={(e) => setSearchTutoring(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+
+                {/* Materia */}
+                <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todas las materias" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las materias</SelectItem>
+                    {subjects.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Fecha */}
+                <Input
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="bg-card"
+                />
+
+                {/* Limpiar */}
+                {activeFiltersCount > 0 && (
+                  <Button variant="ghost" onClick={clearFilters} className="gap-2">
+                    <X className="h-4 w-4" />
+                    Limpiar
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Resultados */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {tutorings.map((t) => {
+          {filteredTutorings.map((t) => {
             const isSolapado = solapamientos.includes(t.id);
             return (
               <Card key={t.id} className={`transition ${isSolapado ? "border-red-400 shadow-lg shadow-red-100" : "shadow-sm"}`}>
@@ -335,6 +438,12 @@ const Schedule = () => {
             );
           })}
         </div>
+        
+        {filteredTutorings.length === 0 && (
+          <p className="text-center text-muted-foreground py-12">
+            No se encontraron tutorías con los filtros seleccionados.
+          </p>
+        )}
       </div>
     </main>
   );
