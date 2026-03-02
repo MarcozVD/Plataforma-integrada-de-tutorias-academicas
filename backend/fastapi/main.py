@@ -4,6 +4,8 @@ from fastapi.responses import RedirectResponse, Response
 from horario_controller import router as horario_router
 from auth_controller import router as auth_router
 from db import init_db
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 app = FastAPI(title="Plataforma Tutorias - FastAPI")
 
@@ -15,6 +17,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    print(f"[validation_error] {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
 
 app.include_router(horario_router, prefix="/api/horario")
 app.include_router(auth_router, prefix="/auth")

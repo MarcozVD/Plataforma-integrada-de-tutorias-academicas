@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { tutorings } from "@/data/mockData";
+import TutoringCard from "@/components/TutoringCard";
 
 interface ScheduleBlock {
   id: string;
@@ -15,24 +15,25 @@ interface ScheduleBlock {
   startTime: string;
   endTime: string;
   subject: string;
+  isTutoring?: boolean;
 }
 
 const allDays = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const dayIndexMap = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const hoursRange = Array.from({ length: 15 }, (_, i) => `${6 + i}:00`);
 
-// Lista de materias únicas
-const subjects = [...new Set(tutorings.map(t => t.subject))];
 
 const Schedule = () => {
   const [userSchedule, setUserSchedule] = useState<ScheduleBlock[]>([]);
+  const [enrolledSessions, setEnrolledSessions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [newBlock, setNewBlock] = useState({
     day: "Lunes",
     subject: "",
     startTime: "08:00",
     endTime: "09:00",
   });
-  
+
   // Filtros de tutorías
   const [searchTutoring, setSearchTutoring] = useState("");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
@@ -50,31 +51,107 @@ const Schedule = () => {
         setUserSchedule([]);
       }
     }
+    fetchEnrolledSessions();
   }, []);
+
+  const fetchEnrolledSessions = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/auth/student/enrolled-sessions", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setEnrolledSessions(data);
+      }
+    } catch (err) {
+      console.error("Error fetching enrolled sessions:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Convertir sesiones inscritas a bloques del horario
+  const combinedSchedule = useMemo(() => {
+    const enrollmentBlocks = enrolledSessions.map(s => {
+      const dt = new Date(s.date_time);
+      const day = dayIndexMap[dt.getDay()];
+      const h = dt.getHours().toString().padStart(2, '0');
+      const m = dt.getMinutes().toString().padStart(2, '0');
+      const startTime = `${h}:${m}`;
+
+      const endDt = new Date(dt.getTime() + s.duration * 60000);
+      const eh = endDt.getHours().toString().padStart(2, '0');
+      const em = endDt.getMinutes().toString().padStart(2, '0');
+      const endTime = `${eh}:${em}`;
+
+      return {
+        id: `enroll-${s.id}`,
+        day,
+        subject: `[TUT] ${s.subject}`,
+        startTime,
+        endTime,
+        isTutoring: true
+      };
+    });
+    return [...userSchedule, ...enrollmentBlocks];
+  }, [userSchedule, enrolledSessions]);
 
   // Guardar horario en localStorage
   useEffect(() => {
     localStorage.setItem("userHorario", JSON.stringify(userSchedule));
   }, [userSchedule]);
 
+  const [realAllSessions, setRealAllSessions] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchAllSessions();
+  }, []);
+
+  const fetchAllSessions = async () => {
+    try {
+      const response = await fetch("/auth/sessions");
+      if (response.ok) {
+        const data = await response.json();
+        setRealAllSessions(data);
+      }
+    } catch (err) {
+      console.error("Error fetching all sessions:", err);
+    }
+  };
+
   // Filtrar tutorías
   const filteredTutorings = useMemo(() => {
-    return tutorings.filter((t) => {
-      // Filtro por búsqueda
-      const matchSearch = 
-        t.subject.toLowerCase().includes(searchTutoring.toLowerCase()) || 
-        t.tutor.toLowerCase().includes(searchTutoring.toLowerCase()) ||
-        t.room.toLowerCase().includes(searchTutoring.toLowerCase());
-      
-      // Filtro por materia
+    return realAllSessions.filter((t) => {
+      const matchSearch =
+        t.subject.toLowerCase().includes(searchTutoring.toLowerCase()) ||
+        t.tutor_name.toLowerCase().includes(searchTutoring.toLowerCase());
+
       const matchSubject = subjectFilter === "all" || t.subject === subjectFilter;
-      
-      // Filtro por fecha
-      const matchDate = !dateFilter || t.date === dateFilter;
+      const matchDate = !dateFilter || t.date_time.startsWith(dateFilter);
 
       return matchSearch && matchSubject && matchDate;
     });
-  }, [searchTutoring, subjectFilter, dateFilter]);
+  }, [searchTutoring, subjectFilter, dateFilter, realAllSessions]);
+
+  // Filtrar tutorías inscritas
+  const filteredEnrolled = useMemo(() => {
+    return enrolledSessions.filter((t) => {
+      const matchSearch =
+        t.subject.toLowerCase().includes(searchTutoring.toLowerCase()) ||
+        t.tutor_name.toLowerCase().includes(searchTutoring.toLowerCase());
+
+      const matchSubject = subjectFilter === "all" || t.subject === subjectFilter;
+      const matchDate = !dateFilter || t.date_time.startsWith(dateFilter);
+
+      return matchSearch && matchSubject && matchDate;
+    });
+  }, [searchTutoring, subjectFilter, dateFilter, enrolledSessions]);
+
+  // Lista de materias únicas para el filtro
+  const availableSubjects = useMemo(() => {
+    return [...new Set(realAllSessions.map(t => t.subject))];
+  }, [realAllSessions]);
 
   const handleAddBlock = () => {
     if (!newBlock.subject.trim()) {
@@ -86,11 +163,10 @@ const Schedule = () => {
       return;
     }
 
-    // Validar que no haya solapamiento con otras clases
     const newStart = timeToMinutes(newBlock.startTime);
     const newEnd = timeToMinutes(newBlock.endTime);
 
-    const haySolapamiento = userSchedule.some((block) => {
+    const haySolapamiento = combinedSchedule.some((block) => {
       if (block.day !== newBlock.day) return false;
       const blockStart = timeToMinutes(block.startTime);
       const blockEnd = timeToMinutes(block.endTime);
@@ -98,7 +174,7 @@ const Schedule = () => {
     });
 
     if (haySolapamiento) {
-      alert(`Ya tienes una clase en ${newBlock.day} que se solapa con este horario. Cambia el día o la hora.`);
+      alert(`Ya tienes una clase o tutoría en ${newBlock.day} que se solapa con este horario.`);
       return;
     }
 
@@ -111,33 +187,26 @@ const Schedule = () => {
   };
 
   const handleRemoveBlock = (id: string) => {
+    if (id.startsWith('enroll-')) {
+      alert("Para cancelar una inscripción usa la pestaña de 'Mis Tutorías' (próximamente)");
+      return;
+    }
     setUserSchedule(userSchedule.filter((b) => b.id !== id));
   };
 
   const checkSolapamientos = () => {
     const solapados: string[] = [];
 
-    tutorings.forEach((tutoria) => {
-      const tDate = new Date(tutoria.date + "T" + tutoria.time);
-      const tDay = dayIndexMap[tDate.getDay()];
-      const [tH, tM] = tutoria.time.split(":").map(Number);
-      const tStartMin = tH * 60 + tM;
-      
-      let tDurationMin = 60;
-      if (tutoria.duration) {
-        const match = tutoria.duration.match(/(\d+(?:\.\d+)?)/);
-        if (match) {
-          tDurationMin = Math.round(parseFloat(match[1]) * 60);
-        }
-      }
-      const tEndMin = tStartMin + tDurationMin;
+    realAllSessions.forEach((tutoria) => {
+      const dt = new Date(tutoria.date_time);
+      const tDay = dayIndexMap[dt.getDay()];
+      const tStartMin = dt.getHours() * 60 + dt.getMinutes();
+      const tEndMin = tStartMin + tutoria.duration;
 
       const overlaps = userSchedule.some((block) => {
         if (block.day !== tDay) return false;
-        const [bH, bM] = block.startTime.split(":").map(Number);
-        const [eH, eM] = block.endTime.split(":").map(Number);
-        const bStartMin = bH * 60 + bM;
-        const bEndMin = eH * 60 + eM;
+        const bStartMin = timeToMinutes(block.startTime);
+        const bEndMin = timeToMinutes(block.endTime);
         return !(tEndMin <= bStartMin || tStartMin >= bEndMin);
       });
 
@@ -155,6 +224,7 @@ const Schedule = () => {
       );
     }, 100);
   };
+
 
   const timeToMinutes = (time: string) => {
     const [h, m] = time.split(":").map(Number);
@@ -176,7 +246,7 @@ const Schedule = () => {
   };
 
   return (
-    <main className="container mx-auto px-4 py-8 max-w-7xl">
+    <main className="container mx-auto px-4 py-8 max-w-[1600px]">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Mi Horario Académico</h1>
         <p className="text-muted-foreground text-lg">
@@ -284,7 +354,7 @@ const Schedule = () => {
                   ))}
 
                   {/* Bloques superpuestos */}
-                  {userSchedule
+                  {combinedSchedule
                     .filter((b) => b.day === day)
                     .map((block) => {
                       const startMin = timeToMinutes(block.startTime);
@@ -298,7 +368,7 @@ const Schedule = () => {
                       return (
                         <div
                           key={block.id}
-                          className="absolute left-1 right-1 bg-blue-500 text-white rounded p-2 text-xs overflow-hidden shadow-md flex flex-col justify-between hover:shadow-lg transition z-10"
+                          className={`absolute left-1 right-1 rounded p-2 text-xs overflow-hidden shadow-md flex flex-col justify-between hover:shadow-lg transition z-10 ${block.isTutoring ? 'bg-indigo-600 text-white' : 'bg-blue-500 text-white'}`}
                           style={{
                             top: `${topPercent}%`,
                             height: `${heightPercent}%`,
@@ -306,17 +376,19 @@ const Schedule = () => {
                           }}
                         >
                           <div>
-                            <div className="font-bold text-sm">{block.subject}</div>
-                            <div className="text-xs opacity-90">
+                            <div className="font-bold text-[10px] md:text-sm line-clamp-2">{block.subject}</div>
+                            <div className="text-[9px] md:text-xs opacity-90">
                               {block.startTime} - {block.endTime}
                             </div>
                           </div>
-                          <button
-                            onClick={() => handleRemoveBlock(block.id)}
-                            className="text-red-300 hover:text-red-100 text-xs self-start mt-1"
-                          >
-                            Eliminar
-                          </button>
+                          {!block.isTutoring && (
+                            <button
+                              onClick={() => handleRemoveBlock(block.id)}
+                              className="text-red-300 hover:text-red-100 text-[10px] self-start mt-1"
+                            >
+                              Eliminar
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -332,7 +404,7 @@ const Schedule = () => {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <Clock className="h-6 w-6 text-blue-600" />
-            Tutorías disponibles
+            Tutorías inscritas
           </h2>
           <Button
             variant={filtersOpen ? "default" : "outline"}
@@ -371,7 +443,7 @@ const Schedule = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas las materias</SelectItem>
-                    {subjects.map((s) => (
+                    {availableSubjects.map((s) => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
                     ))}
                   </SelectContent>
@@ -399,47 +471,31 @@ const Schedule = () => {
 
         {/* Resultados */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredTutorings.map((t) => {
-            const isSolapado = solapamientos.includes(t.id);
-            return (
-              <Card key={t.id} className={`transition ${isSolapado ? "border-red-400 shadow-lg shadow-red-100" : "shadow-sm"}`}>
-                <CardContent className="pt-5">
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="font-bold text-base text-gray-900">{t.subject}</div>
-                        <div className="text-xs text-gray-600 mt-1">
-                          {t.date} • {t.time} • {t.duration}
-                        </div>
-                      </div>
-                      {isSolapado ? (
-                        <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
-                      ) : (
-                        <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-                      )}
-                    </div>
-                    <div className="text-sm bg-gray-50 rounded p-2">
-                      <div className="font-medium text-gray-900">{t.tutor}</div>
-                      <div className="text-xs text-gray-600">{t.room}</div>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <Badge variant="outline" className="text-xs">
-                        {t.spotsAvailable}/{t.spots} lugares
-                      </Badge>
-                      {isSolapado ? (
-                        <Badge className="bg-red-600 text-white text-xs">Solapa con tu horario</Badge>
-                      ) : (
-                        <Badge className="bg-green-600 text-white text-xs">Disponible</Badge>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+          {filteredEnrolled.map((t) => (
+            <TutoringCard
+              key={t.id}
+              tutoring={{
+                id: t.id,
+                subject: t.subject,
+                tutor: t.tutor_name,
+                room: t.room || "Pendiente",
+                date: new Date(t.date_time).toLocaleDateString(),
+                time: new Date(t.date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                duration: `${t.duration} min`,
+                spotsAvailable: 0,
+                spots: 0,
+                accessibility: ["Inscrito"]
+              }}
+              isEnrolled={true}
+              onEnrollSuccess={async () => {
+                await fetchEnrolledSessions();
+                await fetchAllSessions();
+              }}
+            />
+          ))}
         </div>
-        
-        {filteredTutorings.length === 0 && (
+
+        {filteredEnrolled.length === 0 && (
           <p className="text-center text-muted-foreground py-12">
             No se encontraron tutorías con los filtros seleccionados.
           </p>

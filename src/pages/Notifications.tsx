@@ -18,7 +18,7 @@ const colorMap = {
 };
 
 const Notifications = () => (
-  <main className="container mx-auto px-4 py-6 max-w-4xl">
+  <main className="container mx-auto px-4 py-8 max-w-[1600px]">
     <h1 className="text-2xl font-bold mb-1 flex items-center gap-2">
       <Bell className="h-6 w-6" /> Notificaciones
     </h1>

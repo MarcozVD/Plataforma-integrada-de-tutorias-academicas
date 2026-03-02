@@ -17,23 +17,28 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+import TutorPanel from "./pages/TutorPanel";
+import AdminPanel from "./pages/AdminPanel";
+
 const AppLayout = () => {
   const location = useLocation();
-  const isAuthPage = location.pathname === "/login" || location.pathname === "/register";
+  const isAuthPage = location.pathname === "/" || location.pathname === "/register";
 
   return (
     <>
       {!isAuthPage && <Header />}
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/" element={<Index />} />
+        <Route path="/index" element={<Index />} />
         <Route path="/rooms" element={<Rooms />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/history" element={<History />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/profile" element={<StudentProfile />} />
-        <Route path="/tutor" element={<TutorProfile />} />
+        <Route path="/tutor/profile" element={<TutorProfile />} />
+        <Route path="/tutor" element={<TutorPanel />} />
+        <Route path="/admin" element={<AdminPanel />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </>

@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Search, SlidersHorizontal, BookOpen, Building2, Sparkles } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Search, SlidersHorizontal, BookOpen, Building2, Sparkles, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,70 +10,132 @@ import { Label } from "@/components/ui/label";
 import RoomCard from "@/components/RoomCard";
 import TutoringCard from "@/components/TutoringCard";
 import RecommendationCard from "@/components/RecommendationCard";
-import { rooms, tutorings } from "@/data/mockData";
+import { rooms } from "@/data/mockData";
 
 const Index = () => {
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  
+  const [realTutorings, setRealTutorings] = useState<any[]>([]);
+  const [enrolledIds, setEnrolledIds] = useState<Set<number>>(new Set());
+  const userType = localStorage.getItem("userType");
+  const [loading, setLoading] = useState(true);
+
   // filtros de tutorías
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("");
   const [timeFilter, setTimeFilter] = useState<string>("");
-  const [accessFilters, setAccessFilters] = useState({ 
-    wheelchair: false, 
-    visual: false, 
-    hearing: false 
+  const [accessFilters, setAccessFilters] = useState({
+    wheelchair: false,
+    visual: false,
+    hearing: false
   });
 
   // filtros de salones
   const [onlyAvailableRooms, setOnlyAvailableRooms] = useState(false);
 
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      await Promise.all([fetchTutorings(), fetchEnrolled()]);
+      setLoading(false);
+    };
+    loadData();
+  }, []);
+
+  const fetchEnrolled = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const response = await fetch("/auth/student/enrolled-sessions", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setEnrolledIds(new Set(data.map((s: any) => s.id)));
+      }
+    } catch (err) {
+      console.error("Error fetching enrolled:", err);
+    }
+  };
+
+  const fetchTutorings = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const url = userType === "tutor" ? "/auth/tutor/sessions" : "/auth/sessions";
+      const headers: any = {};
+      if (userType === "tutor") headers["Authorization"] = `Bearer ${token}`;
+
+      const response = await fetch(url, { headers });
+      if (response.ok) {
+        const data = await response.json();
+        // Mapear datos reales al formato que espera TutoringCard
+        const mappedData = data.map((t: any) => {
+          const dt = new Date(t.date_time);
+          return {
+            id: t.id,
+            subject: t.subject,
+            tutor: t.tutor_name,
+            room: t.room || "Pendiente",
+            date: dt.toLocaleDateString(),
+            time: dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            duration: `${t.duration} min`,
+            spotsAvailable: t.spots_available,
+            spots: t.spots,
+            accessibility: t.accessibility_type ? [t.accessibility_type] : ["General"]
+          };
+        });
+        setRealTutorings(mappedData);
+      }
+    } catch (err) {
+      console.error("Error fetching tutorings:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Filtrar tutorías
   const filteredTutorings = useMemo(() => {
-    return tutorings.filter((t) => {
+    return realTutorings.filter((t) => {
       // Filtro por búsqueda
-      const matchSearch = 
-        t.subject.toLowerCase().includes(search.toLowerCase()) || 
+      const matchSearch =
+        t.subject.toLowerCase().includes(search.toLowerCase()) ||
         t.tutor.toLowerCase().includes(search.toLowerCase()) ||
         t.room.toLowerCase().includes(search.toLowerCase());
-      
+
       // Filtro por materia
-      const matchSubject = subjectFilter === "all" || 
+      const matchSubject = subjectFilter === "all" ||
         t.subject.toLowerCase().includes(subjectFilter.toLowerCase());
-      
+
       // Filtro por fecha
-      const matchDate = !dateFilter || t.date === dateFilter;
-      
+      const matchDate = !dateFilter || t.date === new Date(dateFilter).toLocaleDateString();
+
       // Filtro por hora
       let matchTime = true;
       if (timeFilter) {
-        const [filterHour] = timeFilter.split(":").map(Number);
-        const [tutHour] = t.time.split(":").map(Number);
-        matchTime = tutHour === filterHour;
+        matchTime = t.time.includes(timeFilter);
       }
-      
+
       // Filtro por accesibilidad
-      const matchAccess = 
-        (!accessFilters.wheelchair || t.accessibility.includes("Silla de ruedas")) &&
-        (!accessFilters.visual || t.accessibility.includes("Apoyo visual")) &&
-        (!accessFilters.hearing || t.accessibility.includes("Apoyo auditivo"));
+      let matchAccess = true;
+      if (accessFilters.wheelchair && !t.accessibility.includes("Movilidad reducida")) matchAccess = false;
+      if (accessFilters.visual && !t.accessibility.includes("Visual")) matchAccess = false;
+      if (accessFilters.hearing && !t.accessibility.includes("Auditiva")) matchAccess = false;
 
       return matchSearch && matchSubject && matchDate && matchTime && matchAccess;
     });
-  }, [search, subjectFilter, dateFilter, timeFilter, accessFilters]);
+  }, [search, subjectFilter, dateFilter, timeFilter, realTutorings]);
 
   // Filtrar salones
   const filteredRooms = useMemo(() => {
     return rooms.filter((r) => {
       // Filtro por búsqueda
-      const matchSearch = 
-        r.name.toLowerCase().includes(search.toLowerCase()) || 
+      const matchSearch =
+        r.name.toLowerCase().includes(search.toLowerCase()) ||
         r.building.toLowerCase().includes(search.toLowerCase());
-      
+
       // Filtro por disponibilidad
       const matchAvailable = !onlyAvailableRooms || r.available;
-      
+
       // Filtro por accesibilidad
       const matchAccess =
         (!accessFilters.wheelchair || r.accessibility.wheelchair) &&
@@ -106,14 +168,14 @@ const Index = () => {
   ].filter(Boolean).length;
 
   return (
-    <main className="container mx-auto px-4 py-6 max-w-6xl">
+    <main className="container mx-auto px-4 py-8 max-w-[1600px] animate-fade-in group">
       {/* Hero */}
       <section className="mb-8" aria-labelledby="hero-heading">
         <h1 id="hero-heading" className="text-3xl md:text-4xl font-bold text-foreground mb-2">
           Encuentra tu espacio de aprendizaje
         </h1>
         <p className="text-muted-foreground text-lg mb-6">
-          Busca salones disponibles y tutorías académicas en tu universidad
+          Busca salones disponibles y {userType === 'tutor' ? 'gestiona tus tutorías programadas' : 'tutorías académicas en tu universidad'}
         </p>
 
         {/* Search */}
@@ -151,11 +213,9 @@ const Index = () => {
                   <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas</SelectItem>
-                    <SelectItem value="calculo">Cálculo I</SelectItem>
-                    <SelectItem value="programacion">Programación II</SelectItem>
-                    <SelectItem value="algebra">Álgebra Lineal</SelectItem>
-                    <SelectItem value="fisica">Física II</SelectItem>
-                    <SelectItem value="estadistica">Estadística</SelectItem>
+                    {[...new Set(realTutorings.map(t => t.subject))].map(s => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -163,22 +223,22 @@ const Index = () => {
               {/* Fecha */}
               <div>
                 <Label className="text-xs font-medium mb-1.5 block">Fecha</Label>
-                <Input 
-                  type="date" 
-                  value={dateFilter} 
+                <Input
+                  type="date"
+                  value={dateFilter}
                   onChange={(e) => setDateFilter(e.target.value)}
-                  className="bg-card" 
+                  className="bg-card"
                 />
               </div>
 
               {/* Hora */}
               <div>
                 <Label className="text-xs font-medium mb-1.5 block">Hora</Label>
-                <Input 
-                  type="time" 
-                  value={timeFilter} 
+                <Input
+                  type="time"
+                  value={timeFilter}
                   onChange={(e) => setTimeFilter(e.target.value)}
-                  className="bg-card" 
+                  className="bg-card"
                 />
               </div>
 
@@ -187,26 +247,26 @@ const Index = () => {
                 <Label className="text-xs font-medium mb-2 block">Accesibilidad</Label>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Checkbox 
-                      id="wheelchair" 
-                      checked={accessFilters.wheelchair} 
-                      onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, wheelchair: !!c }))} 
+                    <Checkbox
+                      id="wheelchair"
+                      checked={accessFilters.wheelchair}
+                      onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, wheelchair: !!c }))}
                     />
                     <Label htmlFor="wheelchair" className="text-xs">Silla de ruedas</Label>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Checkbox 
-                      id="visual" 
-                      checked={accessFilters.visual} 
-                      onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, visual: !!c }))} 
+                    <Checkbox
+                      id="visual"
+                      checked={accessFilters.visual}
+                      onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, visual: !!c }))}
                     />
                     <Label htmlFor="visual" className="text-xs">Apoyo visual</Label>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Checkbox 
-                      id="hearing" 
-                      checked={accessFilters.hearing} 
-                      onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, hearing: !!c }))} 
+                    <Checkbox
+                      id="hearing"
+                      checked={accessFilters.hearing}
+                      onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, hearing: !!c }))}
                     />
                     <Label htmlFor="hearing" className="text-xs">Apoyo auditivo</Label>
                   </div>
@@ -217,10 +277,10 @@ const Index = () => {
             {/* Filtro solo salones disponibles */}
             <div className="mt-4 pt-4 border-t">
               <div className="flex items-center gap-2">
-                <Checkbox 
-                  id="onlyAvailable" 
-                  checked={onlyAvailableRooms} 
-                  onCheckedChange={(c) => setOnlyAvailableRooms(!!c)} 
+                <Checkbox
+                  id="onlyAvailable"
+                  checked={onlyAvailableRooms}
+                  onCheckedChange={(c) => setOnlyAvailableRooms(!!c)}
                 />
                 <Label htmlFor="onlyAvailable" className="text-sm">Solo mostrar salones disponibles</Label>
               </div>
@@ -241,7 +301,7 @@ const Index = () => {
       {/* Recommendations */}
       <section className="mb-8" aria-labelledby="recs-heading">
         <h2 id="recs-heading" className="text-lg font-semibold flex items-center gap-2 mb-3">
-          <Sparkles className="h-5 w-5 text-primary" /> Recomendaciones para ti
+          <Sparkles className="h-5 w-5 text-primary" /> {userType === 'tutor' ? 'Resumen para ti' : 'Recomendaciones para ti'}
         </h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <RecommendationCard
@@ -263,7 +323,7 @@ const Index = () => {
       <Tabs defaultValue="tutorings" className="mb-8">
         <TabsList className="mb-4">
           <TabsTrigger value="tutorings" className="gap-1.5">
-            <BookOpen className="h-4 w-4" /> Tutorías
+            <BookOpen className="h-4 w-4" /> {userType === 'tutor' ? 'Mis Tutorías Programadas' : 'Tutorías Disponibles'}
             <Badge variant="secondary" className="ml-1 text-xs">{filteredTutorings.length}</Badge>
           </TabsTrigger>
           <TabsTrigger value="rooms" className="gap-1.5">
@@ -273,15 +333,32 @@ const Index = () => {
         </TabsList>
 
         <TabsContent value="tutorings">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredTutorings.map((t) => (
-              <TutoringCard key={t.id} tutoring={t} />
-            ))}
-          </div>
-          {filteredTutorings.length === 0 && (
-            <p className="text-center text-muted-foreground py-12">
-              No se encontraron tutorías con los filtros seleccionados.
-            </p>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+              <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
+              <p>Cargando {userType === 'tutor' ? 'tus tutorías' : 'tutorías disponibles'}...</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredTutorings.map((t) => (
+                  <TutoringCard
+                    key={t.id}
+                    tutoring={t}
+                    isEnrolled={enrolledIds.has(t.id)}
+                    onEnrollSuccess={async () => {
+                      await fetchTutorings();
+                      await fetchEnrolled();
+                    }}
+                  />
+                ))}
+              </div>
+              {filteredTutorings.length === 0 && (
+                <p className="text-center text-muted-foreground py-12">
+                  No se encontraron tutorías con los filtros seleccionados.
+                </p>
+              )}
+            </>
           )}
         </TabsContent>
 

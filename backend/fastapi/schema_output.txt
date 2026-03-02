@@ -1,0 +1,48 @@
+
+Table: interest_subjects
+  Column: id (INTEGER)
+  Column: student_id (VARCHAR(50) COLLATE "utf8mb4_unicode_ci")
+  Column: subject_name (VARCHAR(100) COLLATE "utf8mb4_unicode_ci")
+  Column: created_at (DATETIME)
+
+Table: tutoring_enrollments
+  Column: id (INTEGER)
+  Column: student_id (INTEGER)
+  Column: session_id (INTEGER)
+  Column: created_at (DATETIME)
+
+Table: tutoring_preferences
+  Column: id (INTEGER)
+  Column: student_id (VARCHAR(50) COLLATE "utf8mb4_unicode_ci")
+  Column: preference_type (VARCHAR(50) COLLATE "utf8mb4_unicode_ci")
+  Column: enabled (TINYINT)
+  Column: created_at (DATETIME)
+
+Table: tutoring_sessions
+  Column: id (INTEGER)
+  Column: tutor_id (INTEGER)
+  Column: subject (VARCHAR(150) COLLATE "utf8mb4_unicode_ci")
+  Column: date_time (DATETIME)
+  Column: duration (INTEGER)
+  Column: spots (INTEGER)
+  Column: spots_available (INTEGER)
+  Column: room (VARCHAR(100) COLLATE "utf8mb4_unicode_ci")
+  Column: created_at (DATETIME)
+
+Table: user_disabilities
+  Column: id (INTEGER)
+  Column: student_id (VARCHAR(50) COLLATE "utf8mb4_unicode_ci")
+  Column: disability_type (VARCHAR(50) COLLATE "utf8mb4_unicode_ci")
+  Column: disability_description (TEXT COLLATE "utf8mb4_unicode_ci")
+  Column: created_at (DATETIME)
+  Column: updated_at (DATETIME)
+
+Table: users
+  Column: id (INTEGER)
+  Column: student_id (VARCHAR(50) COLLATE "utf8mb4_unicode_ci")
+  Column: full_name (VARCHAR(150) COLLATE "utf8mb4_unicode_ci")
+  Column: email (VARCHAR(200) COLLATE "utf8mb4_unicode_ci")
+  Column: hashed_password (VARCHAR(256) COLLATE "utf8mb4_unicode_ci")
+  Column: user_type (VARCHAR(20) COLLATE "utf8mb4_unicode_ci")
+  Column: carrera (VARCHAR(100) COLLATE "utf8mb4_unicode_ci")
+  Column: created_at (DATETIME)

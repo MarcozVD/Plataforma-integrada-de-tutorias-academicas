@@ -11,7 +11,7 @@ interface UserData {
   full_name: string;
   email: string;
   user_type: string;
-  student_id: string | null;
+  university_id: string | null;
   carrera: string | null;
   disability_type: string | null;
   disability_description: string | null;
@@ -72,11 +72,11 @@ const StudentProfile = () => {
   const [error, setError] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  
+
   // Estado para materias de interés
   const [interestSubjects, setInterestSubjects] = useState<string[]>([]);
   const [newSubject, setNewSubject] = useState("");
-  
+
   // Estado para preferencias de tutoría
   const [tutoringPreferences, setTutoringPreferences] = useState({
     morning: false,
@@ -102,7 +102,7 @@ const StudentProfile = () => {
     const localSubjects = localStorage.getItem("interest_subjects");
     const localPreferences = localStorage.getItem("tutoring_preferences");
     const localDisability = localStorage.getItem("disability_info");
-    
+
     if (localSubjects && interestSubjects.length === 0) {
       try {
         setInterestSubjects(JSON.parse(localSubjects));
@@ -110,7 +110,7 @@ const StudentProfile = () => {
         console.error("Error parsing local subjects:", e);
       }
     }
-    
+
     if (localPreferences && !tutoringPreferences.morning && !tutoringPreferences.afternoon && !tutoringPreferences.evening) {
       try {
         setTutoringPreferences(JSON.parse(localPreferences));
@@ -146,13 +146,13 @@ const StudentProfile = () => {
     // Verificar si los datos realmente cambiaron respecto a los del servidor
     const subjectsChanged = JSON.stringify(debouncedSubjects) !== JSON.stringify(userData.interest_subjects);
     const preferencesChanged = JSON.stringify(debouncedPreferences) !== JSON.stringify(userData.tutoring_preferences);
-    const disabilityChanged = debouncedDisability.type !== (userData.disability_type || "none") || 
-                             debouncedDisability.description !== (userData.disability_description || "");
+    const disabilityChanged = debouncedDisability.type !== (userData.disability_type || "none") ||
+      debouncedDisability.description !== (userData.disability_description || "");
 
     if (subjectsChanged || preferencesChanged) {
       savePreferences();
     }
-    
+
     if (disabilityChanged) {
       saveDisability();
     }
@@ -179,10 +179,10 @@ const StudentProfile = () => {
 
       const data = await response.json();
       setUserData(data);
-      
+
       // Inicializar materias de interés
       setInterestSubjects(data.interest_subjects || []);
-      
+
       // Inicializar preferencias de tutoría
       setTutoringPreferences(data.tutoring_preferences || {
         morning: false,
@@ -199,9 +199,9 @@ const StudentProfile = () => {
         localStorage.setItem("interest_subjects", JSON.stringify(data.interest_subjects));
       }
       localStorage.setItem("tutoring_preferences", JSON.stringify(data.tutoring_preferences || {}));
-      localStorage.setItem("disability_info", JSON.stringify({ 
-        type: data.disability_type || "none", 
-        description: data.disability_description || "" 
+      localStorage.setItem("disability_info", JSON.stringify({
+        type: data.disability_type || "none",
+        description: data.disability_description || ""
       }));
     } catch (err) {
       console.error("Error fetching user data:", err);
@@ -209,7 +209,7 @@ const StudentProfile = () => {
       const localSubjects = localStorage.getItem("interest_subjects");
       const localPreferences = localStorage.getItem("tutoring_preferences");
       const localDisability = localStorage.getItem("disability_info");
-      
+
       if (localSubjects) setInterestSubjects(JSON.parse(localSubjects));
       if (localPreferences) setTutoringPreferences(JSON.parse(localPreferences));
       if (localDisability) {
@@ -217,7 +217,7 @@ const StudentProfile = () => {
         setDisabilityType(di.type || "none");
         setDisabilityDescription(di.description || "");
       }
-      
+
       setError("Error al cargar datos del servidor. Usando datos locales.");
     } finally {
       setLoading(false);
@@ -254,14 +254,14 @@ const StudentProfile = () => {
       }
 
       const data = await response.json();
-      
+
       // Actualizar datos locales del usuario
       setUserData(prev => prev ? {
         ...prev,
         interest_subjects: data.interest_subjects,
         tutoring_preferences: data.tutoring_preferences
       } : null);
-      
+
       setLastSaved(new Date());
       setHasChanges(false);
     } catch (err: any) {
@@ -301,14 +301,14 @@ const StudentProfile = () => {
       }
 
       const data = await response.json();
-      
+
       // Actualizar datos locales del usuario
       setUserData(prev => prev ? {
         ...prev,
         disability_type: data.disability_type,
         disability_description: data.disability_description
       } : null);
-      
+
       setLastSaved(new Date());
       setHasChanges(false);
     } catch (err: any) {
@@ -368,7 +368,7 @@ const StudentProfile = () => {
   }
 
   return (
-    <main className="container mx-auto px-4 py-6 max-w-3xl">
+    <main className="container mx-auto px-4 py-8 max-w-[1600px]">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -376,7 +376,7 @@ const StudentProfile = () => {
           </h1>
           <p className="text-muted-foreground">Configura tu perfil y preferencias</p>
         </div>
-        
+
         {/* Estado de guardado */}
         <div className="flex items-center gap-2 text-sm">
           {saving ? (
@@ -417,32 +417,32 @@ const StudentProfile = () => {
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <Label>Nombre completo</Label>
-                <Input 
-                  defaultValue={userData?.full_name || ""} 
-                  className="mt-1" 
+                <Input
+                  defaultValue={userData?.full_name || ""}
+                  className="mt-1"
                 />
               </div>
               <div>
                 <Label>Correo electrónico</Label>
-                <Input 
-                  defaultValue={userData?.email || ""} 
-                  className="mt-1" 
+                <Input
+                  defaultValue={userData?.email || ""}
+                  className="mt-1"
                   disabled
                 />
               </div>
               <div>
                 <Label>Carrera</Label>
-                <Input 
-                  defaultValue={userData?.carrera || ""} 
-                  className="mt-1" 
+                <Input
+                  defaultValue={userData?.carrera || ""}
+                  className="mt-1"
                   placeholder="Ej: Ingeniería en Sistemas"
                 />
               </div>
               <div>
-                <Label>Código estudiantil</Label>
-                <Input 
-                  defaultValue={userData?.student_id || ""} 
-                  className="mt-1" 
+                <Label>ID Académico</Label>
+                <Input
+                  defaultValue={userData?.university_id || ""}
+                  className="mt-1"
                   placeholder="Ej: U00123456"
                   disabled
                 />
@@ -474,7 +474,7 @@ const StudentProfile = () => {
                 <option value="otra">Otra</option>
               </select>
             </div>
-            
+
             {disabilityType !== "none" && (
               <div>
                 <Label>Descripción de necesidades específicas</Label>
@@ -505,7 +505,7 @@ const StudentProfile = () => {
             <p className="text-sm text-muted-foreground">
               Selecciona las materias en las que necesitas tutorías
             </p>
-            
+
             {/* Lista de materias seleccionadas */}
             <div className="flex flex-wrap gap-2">
               {interestSubjects.length === 0 ? (
@@ -514,9 +514,9 @@ const StudentProfile = () => {
                 </p>
               ) : (
                 interestSubjects.map((subject) => (
-                  <Badge 
-                    key={subject} 
-                    variant="secondary" 
+                  <Badge
+                    key={subject}
+                    variant="secondary"
                     className="text-sm py-1.5 px-3 flex items-center gap-1"
                   >
                     {subject}
@@ -547,8 +547,8 @@ const StudentProfile = () => {
                     </option>
                   ))}
               </select>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleAddSubject}
                 disabled={!newSubject}
                 className="gap-1"
@@ -571,7 +571,7 @@ const StudentProfile = () => {
             <p className="text-sm text-muted-foreground">
               Selecciona tus horarios preferidos para recibir tutorías
             </p>
-            
+
             <div className="flex flex-wrap gap-2">
               <Button
                 variant={tutoringPreferences.morning ? "default" : "outline"}
@@ -606,8 +606,8 @@ const StudentProfile = () => {
 
         {/* Save Button (optional - for manual save) */}
         {hasChanges && (
-          <Button 
-            onClick={handleSaveNow} 
+          <Button
+            onClick={handleSaveNow}
             disabled={saving}
             className="w-full gap-2"
           >

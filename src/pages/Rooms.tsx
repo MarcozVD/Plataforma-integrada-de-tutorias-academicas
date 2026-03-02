@@ -11,22 +11,22 @@ const Rooms = () => {
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
-  const [accessFilters, setAccessFilters] = useState({ 
-    wheelchair: false, 
-    visual: false, 
-    hearing: false 
+  const [accessFilters, setAccessFilters] = useState({
+    wheelchair: false,
+    visual: false,
+    hearing: false
   });
 
   const filtered = useMemo(() => {
     return rooms.filter((r) => {
       // Filtro por búsqueda
-      const matchSearch = 
-        r.name.toLowerCase().includes(search.toLowerCase()) || 
+      const matchSearch =
+        r.name.toLowerCase().includes(search.toLowerCase()) ||
         r.building.toLowerCase().includes(search.toLowerCase());
-      
+
       // Filtro por disponibilidad
       const matchAvailable = !onlyAvailable || r.available;
-      
+
       // Filtro por accesibilidad
       const matchAccess =
         (!accessFilters.wheelchair || r.accessibility.wheelchair) &&
@@ -53,7 +53,7 @@ const Rooms = () => {
   };
 
   return (
-    <main className="container mx-auto px-4 py-6 max-w-6xl">
+    <main className="container mx-auto px-4 py-8 max-w-[1600px]">
       <h1 className="text-2xl font-bold mb-1">Salones Universitarios</h1>
       <p className="text-muted-foreground mb-6">Consulta disponibilidad y accesibilidad de los salones</p>
 
@@ -61,11 +61,11 @@ const Rooms = () => {
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Buscar salón..." 
-            value={search} 
-            onChange={(e) => setSearch(e.target.value)} 
-            className="pl-10 bg-card" 
+          <Input
+            placeholder="Buscar salón..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10 bg-card"
           />
         </div>
         <Button
@@ -84,39 +84,39 @@ const Rooms = () => {
         <div className="bg-card rounded-lg border p-4 mb-6">
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div className="flex items-center gap-2">
-              <Checkbox 
-                id="available" 
-                checked={onlyAvailable} 
-                onCheckedChange={(c) => setOnlyAvailable(!!c)} 
+              <Checkbox
+                id="available"
+                checked={onlyAvailable}
+                onCheckedChange={(c) => setOnlyAvailable(!!c)}
               />
               <Label htmlFor="available" className="text-sm">Solo disponibles</Label>
             </div>
             <div className="flex items-center gap-2">
-              <Checkbox 
-                id="wheelchair" 
-                checked={accessFilters.wheelchair} 
-                onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, wheelchair: !!c }))} 
+              <Checkbox
+                id="wheelchair"
+                checked={accessFilters.wheelchair}
+                onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, wheelchair: !!c }))}
               />
               <Label htmlFor="wheelchair" className="text-sm">Accesible silla de ruedas</Label>
             </div>
             <div className="flex items-center gap-2">
-              <Checkbox 
-                id="visual" 
-                checked={accessFilters.visual} 
-                onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, visual: !!c }))} 
+              <Checkbox
+                id="visual"
+                checked={accessFilters.visual}
+                onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, visual: !!c }))}
               />
               <Label htmlFor="visual" className="text-sm">Apoyo visual</Label>
             </div>
             <div className="flex items-center gap-2">
-              <Checkbox 
-                id="hearing" 
-                checked={accessFilters.hearing} 
-                onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, hearing: !!c }))} 
+              <Checkbox
+                id="hearing"
+                checked={accessFilters.hearing}
+                onCheckedChange={(c) => setAccessFilters((p) => ({ ...p, hearing: !!c }))}
               />
               <Label htmlFor="hearing" className="text-sm">Apoyo auditivo</Label>
             </div>
           </div>
-          
+
           {activeFiltersCount > 0 && (
             <div className="mt-4 pt-4 border-t flex justify-end">
               <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs">

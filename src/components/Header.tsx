@@ -18,12 +18,12 @@ const Header = () => {
 
   const handleLogout = () => {
     localStorage.clear();
-    navigate("/login");
+    navigate("/");
   };
 
   // Navegación para estudiantes
   const studentNavItems = [
-    { path: "/", label: "Inicio" },
+    { path: "/index", label: "Inicio" },
     { path: "/rooms", label: "Salones Disponibles" },
     { path: "/schedule", label: "Mi Horario" },
     { path: "/history", label: "Mis Tutorías" },
@@ -31,19 +31,26 @@ const Header = () => {
 
   // Navegación para tutores
   const tutorNavItems = [
-    { path: "/", label: "Inicio" },
+    { path: "/index", label: "Inicio" },
     { path: "/rooms", label: "Salones" },
-    { path: "/schedule", label: "Horario" },
     { path: "/tutor", label: "Panel de Tutor" },
   ];
 
+  // Navegación para administradores
+  const adminNavItems = [
+    { path: "/admin", label: "Panel Admin" },
+    { path: "/rooms", label: "Salones" },
+  ];
+
   // Usar la navegación según el tipo de usuario
-  const navItems = userType === "tutor" ? tutorNavItems : studentNavItems;
+  const navItems = userType === "admin" ? adminNavItems : userType === "tutor" ? tutorNavItems : studentNavItems;
+
+  const profilePath = userType === "admin" ? "/admin" : userType === "tutor" ? "/tutor/profile" : "/profile";
 
   return (
     <header className="sticky top-0 z-50 bg-primary text-primary-foreground shadow-lg">
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
-        <Link to="/" className="flex items-center gap-2 font-bold text-lg">
+        <Link to="/index" className="flex items-center gap-2 font-bold text-lg">
           <GraduationCap className="h-7 w-7" />
           <span className="hidden sm:inline">Tutorías Académicas</span>
           <span className="sm:hidden">PITA</span>
@@ -54,11 +61,10 @@ const Header = () => {
             <Link
               key={item.path}
               to={item.path}
-              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                location.pathname === item.path
-                  ? "bg-primary-foreground/20"
-                  : "hover:bg-primary-foreground/10"
-              }`}
+              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${location.pathname === item.path
+                ? "bg-primary-foreground/20"
+                : "hover:bg-primary-foreground/10"
+                }`}
             >
               {item.label}
             </Link>
@@ -74,7 +80,7 @@ const Header = () => {
               </Badge>
             </Button>
           </Link>
-          <Link to="/profile" aria-label="Perfil">
+          <Link to={profilePath} aria-label="Perfil">
             <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
               <User className="h-5 w-5" />
             </Button>
@@ -107,11 +113,10 @@ const Header = () => {
               key={item.path}
               to={item.path}
               onClick={() => setMobileOpen(false)}
-              className={`block px-3 py-2 rounded-md text-sm font-medium mt-1 transition-colors ${
-                location.pathname === item.path
-                  ? "bg-primary-foreground/20"
-                  : "hover:bg-primary-foreground/10"
-              }`}
+              className={`block px-3 py-2 rounded-md text-sm font-medium mt-1 transition-colors ${location.pathname === item.path
+                ? "bg-primary-foreground/20"
+                : "hover:bg-primary-foreground/10"
+                }`}
             >
               {item.label}
             </Link>

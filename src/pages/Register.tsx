@@ -58,7 +58,7 @@ const Register = () => {
         body: JSON.stringify({
           full_name: formData.fullName,
           email: formData.email,
-          student_id: formData.studentId,
+          university_id: formData.studentId,
           password: formData.password,
           confirm_password: formData.confirmPassword,
           carrera: formData.carrera || null,
@@ -75,7 +75,7 @@ const Register = () => {
       }
 
       // Registro exitoso, redirigir al login
-      navigate("/login");
+      navigate("/");
     } catch (error: any) {
       console.error("Error en registro:", error);
       setErrors({ submit: error.message || "Error al conectar con el servidor" });
@@ -182,6 +182,23 @@ const Register = () => {
                 )}
               </div>
 
+              {/* User Type */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Tipo de usuario
+                </label>
+                <select
+                  name="userType"
+                  value={formData.userType}
+                  onChange={handleChange}
+                  className="w-full h-10 px-3 border border-gray-300 rounded-md bg-white"
+                  required
+                >
+                  <option value="student">Estudiante</option>
+                  <option value="tutor">Tutor</option>
+                </select>
+              </div>
+
               {/* Carrera */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -191,7 +208,7 @@ const Register = () => {
                   name="carrera"
                   value={formData.carrera}
                   onChange={handleChange}
-                  className="w-full h-10 px-3 border border-gray-300 rounded-md"
+                  className="w-full h-10 px-3 border border-gray-300 rounded-md bg-white"
                 >
                   <option value="">Selecciona tu carrera</option>
                   <option value="Ingeniería de Sistemas">Ingeniería de Sistemas</option>
@@ -329,7 +346,7 @@ const Register = () => {
             {/* Login Link */}
             <p className="text-center text-gray-700">
               ¿Ya tienes cuenta?{" "}
-              <Link to="/login" className="text-indigo-600 hover:text-indigo-700 font-semibold">
+              <Link to="/" className="text-indigo-600 hover:text-indigo-700 font-semibold">
                 Inicia sesión
               </Link>
             </p>

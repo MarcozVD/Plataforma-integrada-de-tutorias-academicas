@@ -1,18 +1,17 @@
 import { useState, useEffect } from "react";
-import { GraduationCap, BookOpen, Clock, Plus, Save, Loader2, Check, X } from "lucide-react";
+import { GraduationCap, BookOpen, Clock, Plus, Save, Loader2, Check, X, User } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface UserData {
   id: number;
   full_name: string;
   email: string;
   user_type: string;
-  student_id: string | null;
+  university_id: string | null;
   carrera: string | null;
   disability_type: string | null;
   disability_description: string | null;
@@ -24,20 +23,10 @@ interface UserData {
   };
 }
 
-// Materias disponibles para tutors
 const availableSubjects = [
-  "Cálculo I",
-  "Cálculo II",
-  "Programación I",
-  "Programación II",
-  "Álgebra Lineal",
-  "Física I",
-  "Física II",
-  "Estadística",
-  "Matemáticas Discretas",
-  "Estructura de Datos",
-  "Bases de Datos",
-  "Redes de Computadoras",
+  "Cálculo I", "Cálculo II", "Programación I", "Programación II",
+  "Álgebra Lineal", "Física I", "Física II", "Estadística",
+  "Matemáticas Discretas", "Estructura de Datos", "Bases de Datos", "Redes de Computadoras",
 ];
 
 const TutorProfile = () => {
@@ -48,11 +37,8 @@ const TutorProfile = () => {
   const [hasChanges, setHasChanges] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  // Estado para materias que puede dictar
   const [tutoringSubjects, setTutoringSubjects] = useState<string[]>([]);
   const [newSubject, setNewSubject] = useState("");
-
-  // Estado para preferencias de horario
   const [tutoringPreferences, setTutoringPreferences] = useState({
     morning: false,
     afternoon: false,
@@ -62,14 +48,6 @@ const TutorProfile = () => {
   useEffect(() => {
     fetchUserData();
   }, []);
-
-  // Guardar en localStorage cuando hay cambios
-  useEffect(() => {
-    if (tutoringSubjects.length > 0) {
-      localStorage.setItem("tutoring_subjects", JSON.stringify(tutoringSubjects));
-    }
-    localStorage.setItem("tutor_preferences", JSON.stringify(tutoringPreferences));
-  }, [tutoringSubjects, tutoringPreferences]);
 
   const fetchUserData = async () => {
     try {
@@ -81,50 +59,18 @@ const TutorProfile = () => {
       }
 
       const response = await fetch("/auth/me", {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
+        headers: { "Authorization": `Bearer ${token}` },
       });
 
-      if (!response.ok) {
-        throw new Error("Error al obtener datos del usuario");
-      }
+      if (!response.ok) throw new Error("Error al obtener datos");
 
       const data = await response.json();
       setUserData(data);
-
-      // Cargar materias de interés existentes
       setTutoringSubjects(data.interest_subjects || []);
-
-      // Cargar preferencias de tutoría
-      setTutoringPreferences(data.tutoring_preferences || {
-        morning: false,
-        afternoon: false,
-        evening: false,
-      });
-
-      // Cargar desde localStorage si no hay datos del servidor
-      const localSubjects = localStorage.getItem("tutoring_subjects");
-      const localPrefs = localStorage.getItem("tutor_preferences");
-
-      if ((!data.interest_subjects || data.interest_subjects.length === 0) && localSubjects) {
-        setTutoringSubjects(JSON.parse(localSubjects));
-      }
-
-      if ((!data.tutoring_preferences || Object.values(data.tutoring_preferences).every(v => !v)) && localPrefs) {
-        setTutoringPreferences(JSON.parse(localPrefs));
-      }
+      setTutoringPreferences(data.tutoring_preferences || { morning: false, afternoon: false, evening: false });
     } catch (err) {
-      console.error("Error fetching user data:", err);
-      
-      // Cargar desde localStorage como fallback
-      const localSubjects = localStorage.getItem("tutoring_subjects");
-      const localPrefs = localStorage.getItem("tutor_preferences");
-      
-      if (localSubjects) setTutoringSubjects(JSON.parse(localSubjects));
-      if (localPrefs) setTutoringPreferences(JSON.parse(localPrefs));
-      
-      setError("Error al cargar datos del servidor. Usando datos locales.");
+      console.error(err);
+      setError("Error al cargar datos del servidor");
     } finally {
       setLoading(false);
     }
@@ -132,16 +78,9 @@ const TutorProfile = () => {
 
   const saveTutoringInfo = async () => {
     if (!userData) return;
-
     setSaving(true);
-    setError("");
-
     try {
       const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("No hay sesión activa");
-      }
-
       const response = await fetch("/auth/preferences", {
         method: "PUT",
         headers: {
@@ -154,24 +93,13 @@ const TutorProfile = () => {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("Error al guardar información de tutor");
-      }
-
+      if (!response.ok) throw new Error("Error al guardar");
       const data = await response.json();
-      
-      // Actualizar datos locales del usuario
-      setUserData(prev => prev ? {
-        ...prev,
-        interest_subjects: data.interest_subjects,
-        tutoring_preferences: data.tutoring_preferences
-      } : null);
-      
+      setUserData(prev => prev ? { ...prev, interest_subjects: data.interest_subjects, tutoring_preferences: data.tutoring_preferences } : null);
       setLastSaved(new Date());
       setHasChanges(false);
-    } catch (err: any) {
-      console.error("Error saving tutoring info:", err);
-      setError("Guardado local. Se sincronizará cuando haya conexión.");
+    } catch (err) {
+      setError("Error al guardar información");
     } finally {
       setSaving(false);
     }
@@ -191,238 +119,165 @@ const TutorProfile = () => {
   };
 
   const handleTogglePreference = (pref: "morning" | "afternoon" | "evening") => {
-    setTutoringPreferences(prev => ({
-      ...prev,
-      [pref]: !prev[pref]
-    }));
+    setTutoringPreferences(prev => ({ ...prev, [pref]: !prev[pref] }));
     setHasChanges(true);
   };
 
   if (loading) {
     return (
-      <main className="container mx-auto px-4 py-6 max-w-3xl">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin mr-2" />
-          <p className="text-muted-foreground">Cargando perfil...</p>
-        </div>
-      </main>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+      </div>
     );
   }
 
   return (
-    <main className="container mx-auto px-4 py-6 max-w-3xl">
-      <div className="flex items-center justify-between mb-6">
+    <main className="container mx-auto px-4 py-8 max-w-[1600px]">
+      <div className="flex items-center justify-between mb-8 text-center sm:text-left flex-col sm:flex-row gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <GraduationCap className="h-6 w-6" /> Perfil de Tutor
+          <h1 className="text-3xl font-bold flex items-center gap-3 text-indigo-900 leading-tight">
+            <User className="h-8 w-8 text-indigo-600 bg-indigo-50 p-1.5 rounded-lg shadow-sm" />
+            Configuración del Perfil de Tutor
           </h1>
-          <p className="text-muted-foreground">Configura tu perfil como tutor</p>
+          <p className="text-muted-foreground mt-1 text-lg">Administra tu información académica y las materias que dominas</p>
         </div>
-        
-        {/* Estado de guardado */}
-        <div className="flex items-center gap-2 text-sm">
+
+        <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-full border shadow-sm text-sm font-medium">
           {saving ? (
             <span className="flex items-center text-blue-600">
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              Guardando...
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Sincronizando...
             </span>
           ) : hasChanges ? (
             <span className="flex items-center text-amber-600">
-              <div className="h-2 w-2 rounded-full bg-amber-500 mr-1 animate-pulse" />
-              Cambios sin guardar
+              <div className="h-2 w-2 rounded-full bg-amber-500 mr-2 animate-pulse" />
+              Cambios pendientes
             </span>
           ) : lastSaved ? (
             <span className="flex items-center text-green-600">
-              <Check className="h-4 w-4 mr-1" />
-              Guardado
+              <Check className="h-4 w-4 mr-2" />
+              Actualizado
             </span>
-          ) : null}
+          ) : (
+            <span className="text-muted-foreground italic flex items-center gap-2">
+              <Clock className="h-4 w-4" /> Listo
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Mensaje de error */}
       {error && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-lg mb-4 text-sm">
-          {error}
-        </div>
+        <Card className="border-red-200 bg-red-50 text-red-700 mb-6">
+          <CardContent className="py-3 px-4 flex items-center gap-2">
+            {error}
+          </CardContent>
+        </Card>
       )}
 
-      <div className="space-y-6">
-        {/* Basic Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <GraduationCap className="h-5 w-5" /> Información del tutor
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <Label>Nombre completo</Label>
-                <Input 
-                  defaultValue={userData?.full_name || ""} 
-                  className="mt-1" 
-                />
-              </div>
-              <div>
-                <Label>Correo electrónico</Label>
-                <Input 
-                  defaultValue={userData?.email || ""} 
-                  className="mt-1" 
-                  disabled
-                />
-              </div>
-              <div>
-                <Label>Número de estudiante</Label>
-                <Input 
-                  defaultValue={userData?.student_id || ""} 
-                  className="mt-1" 
-                  disabled
-                  placeholder="U00123456"
-                />
-              </div>
-              <div>
-                <Label>Carrera</Label>
-                <Input 
-                  defaultValue={userData?.carrera || ""} 
-                  className="mt-1" 
-                  placeholder="Ej: Ingeniería en Sistemas"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid lg:grid-cols-2 gap-8 items-start">
+        <div className="space-y-6">
+          <Card className="shadow-xl bg-white border-2 border-indigo-50/50">
+            <CardHeader className="bg-gradient-to-r from-indigo-50/20 to-transparent pb-4">
+              <CardTitle className="text-xl flex items-center gap-3 text-indigo-900">
+                <GraduationCap className="h-6 w-6 text-indigo-600" /> Datos Académicos
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-2">
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Nombre completo</Label>
+                    <Input defaultValue={userData?.full_name || ""} className="h-11 border-indigo-100" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Correo electrónico</Label>
+                    <Input defaultValue={userData?.email || ""} className="h-11 bg-muted/30 border-muted" disabled />
+                  </div>
+                  <div className="space-y-2 border-l-4 border-indigo-200 pl-4 bg-indigo-50/20 py-1">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-indigo-700 block">ID Docente</Label>
+                    <p className="text-lg font-mono font-bold text-indigo-900">{userData?.university_id || "-"}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Carrera</Label>
+                    <Input defaultValue={userData?.carrera || ""} className="h-11 border-indigo-100" />
+                  </div>
+                </div>
 
-        {/* Subjects - Materias que puede dictar */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <BookOpen className="h-5 w-5" /> Materias que puedo dictar
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Selecciona las materias en las que puedes ofrecer tutorías
-            </p>
-            
-            {/* Lista de materias */}
-            <div className="flex flex-wrap gap-2">
-              {tutoringSubjects.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">
-                  No hay materias seleccionadas
-                </p>
-              ) : (
-                tutoringSubjects.map((subject) => (
-                  <Badge 
-                    key={subject} 
-                    variant="secondary" 
-                    className="text-sm py-1.5 px-3 flex items-center gap-1"
-                  >
-                    {subject}
-                    <button
-                      onClick={() => handleRemoveSubject(subject)}
-                      className="ml-1 hover:text-red-500"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))
-              )}
-            </div>
+                <div className="pt-4 border-t border-dashed">
+                  <h3 className="font-semibold text-indigo-900 mb-3">Disponibilidad Preferente</h3>
+                  <div className="flex flex-wrap gap-3">
+                    {["morning", "afternoon", "evening"].map((p) => (
+                      <Button
+                        key={p}
+                        variant={tutoringPreferences[p as keyof typeof tutoringPreferences] ? "default" : "outline"}
+                        onClick={() => handleTogglePreference(p as any)}
+                        className={tutoringPreferences[p as keyof typeof tutoringPreferences] ? "bg-indigo-600 shadow-md" : "border-indigo-100 text-indigo-600"}
+                      >
+                        {p === "morning" ? "🌅 Mañana" : p === "afternoon" ? "☀️ Tarde" : "🌙 Noche"}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Agregar materia */}
-            <div className="flex gap-2">
-              <select
-                value={newSubject}
-                onChange={(e) => setNewSubject(e.target.value)}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Selecciona una materia...</option>
-                {availableSubjects
-                  .filter(s => !tutoringSubjects.includes(s))
-                  .map((subject) => (
-                    <option key={subject} value={subject}>
-                      {subject}
-                    </option>
+          {hasChanges && (
+            <Button onClick={saveTutoringInfo} disabled={saving} className="w-full h-14 text-lg bg-indigo-600 hover:bg-indigo-700 shadow-xl gap-3">
+              {saving ? <Loader2 className="animate-spin h-6 w-6" /> : <Save className="h-6 w-6" />}
+              Guardar Cambios
+            </Button>
+          )}
+        </div>
+
+        <div className="space-y-6">
+          <Card className="shadow-xl bg-white border-2 border-indigo-600/10 min-h-[500px]">
+            <CardHeader className="bg-indigo-600 text-white pb-6 pt-8">
+              <CardTitle className="text-2xl flex items-center gap-3">
+                <BookOpen className="h-8 w-8" /> Materias que Dictas
+              </CardTitle>
+              <p className="text-indigo-100 mt-2">Gestiona las disciplinas en las que brindas apoyo académico</p>
+            </CardHeader>
+            <CardContent className="pt-8 space-y-8">
+              <div className="grid gap-3">
+                <div className="flex flex-wrap gap-3 p-6 bg-indigo-50/30 rounded-2xl border-2 border-dashed border-indigo-100 min-h-[120px] content-start">
+                  {tutoringSubjects.map((s) => (
+                    <Badge key={s} className="text-sm py-2.5 px-5 bg-white text-indigo-700 border-2 border-indigo-200">
+                      {s}
+                      <button onClick={() => handleRemoveSubject(s)} className="ml-3 text-muted-foreground hover:text-red-500">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </Badge>
                   ))}
-              </select>
-              <Button 
-                variant="outline" 
-                onClick={handleAddSubject}
-                disabled={!newSubject}
-                className="gap-1"
-              >
-                <Plus className="h-4 w-4" />
-                Agregar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                </div>
+              </div>
 
-        {/* Availability - Horario disponible */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Clock className="h-5 w-5" /> Horario disponible
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Selecciona tus horarios disponibles para dar tutorías
-            </p>
-            
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={tutoringPreferences.morning ? "default" : "outline"}
-                onClick={() => handleTogglePreference("morning")}
-                className={tutoringPreferences.morning ? "bg-blue-600" : ""}
-              >
-                🌅 Mañana (7-12)
-              </Button>
-              <Button
-                variant={tutoringPreferences.afternoon ? "default" : "outline"}
-                onClick={() => handleTogglePreference("afternoon")}
-                className={tutoringPreferences.afternoon ? "bg-blue-600" : ""}
-              >
-                ☀️ Tarde (12-18)
-              </Button>
-              <Button
-                variant={tutoringPreferences.evening ? "default" : "outline"}
-                onClick={() => handleTogglePreference("evening")}
-                className={tutoringPreferences.evening ? "bg-blue-600" : ""}
-              >
-                🌙 Noche (18-21)
-              </Button>
-            </div>
-
-            {Object.values(tutoringPreferences).filter(Boolean).length === 0 && (
-              <p className="text-sm text-muted-foreground italic">
-                No hay horario disponible seleccionado
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Save Button */}
-        {hasChanges && (
-          <Button 
-            onClick={saveTutoringInfo} 
-            disabled={saving}
-            className="w-full gap-2"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Guardando...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                Guardar información de tutor
-              </>
-            )}
-          </Button>
-        )}
+              <div className="space-y-4 pt-4 border-t border-dashed">
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Vincular Nueva Materia</Label>
+                <div className="flex gap-2">
+                  <select
+                    value={availableSubjects.includes(newSubject) ? newSubject : ""}
+                    onChange={(e) => setNewSubject(e.target.value)}
+                    className="flex-1 h-12 px-4 bg-white border-2 border-indigo-50 rounded-xl"
+                  >
+                    <option value="">Selecciona del catálogo...</option>
+                    {availableSubjects.filter(s => !tutoringSubjects.includes(s)).map(s => <option key={s} value={s}>{s}</option>)}
+                    <option value="custom">-- Otra --</option>
+                  </select>
+                  <Button onClick={handleAddSubject} disabled={!newSubject || newSubject === "custom"} className="h-12 bg-indigo-600">
+                    <Plus className="h-5 w-5 mr-2" /> Agregar
+                  </Button>
+                </div>
+                {newSubject === "custom" && (
+                  <div className="flex gap-2 mt-2">
+                    <Input placeholder="Escribe la materia..." onChange={(e) => setNewSubject(e.target.value)} className="h-11" />
+                    <Button onClick={handleAddSubject} variant="secondary" className="h-11">Aceptar</Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </main>
   );

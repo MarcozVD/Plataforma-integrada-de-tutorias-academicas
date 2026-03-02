@@ -24,7 +24,7 @@ const Login = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          student_id: studentId,
+          university_id: studentId,
           password: password,
         }),
       });
@@ -42,8 +42,12 @@ const Login = () => {
       localStorage.setItem("fullName", data.full_name);
       localStorage.setItem("carrera", data.carrera || "");
 
-      // Redirigir al home
-      navigate("/");
+      // Redirigir según tipo de usuario
+      if (data.user_type === "admin") {
+        navigate("/admin");
+      } else {
+        navigate("/index");
+      }
     } catch (err: any) {
       console.error("Error en login:", err);
       setError(err.message || "Error al conectar con el servidor");
