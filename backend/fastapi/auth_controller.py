@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
+from sqlalchemy import or_, func
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from db import SessionLocal, init_db
-from models import User, InterestSubject, TutoringPreference, UserDisability, TutoringSession, TutoringEnrollment
+from models import User, InterestSubject, TutoringPreference, UserDisability, TutoringSession, TutoringEnrollment, Room, RoomAvailability
 import bcrypt
 import traceback
 from fastapi.responses import JSONResponse
@@ -11,7 +12,7 @@ import os
 from jose import jwt
 from dotenv import load_dotenv
 from typing import Literal
-from datetime import datetime
+from datetime import datetime, timedelta
 
 load_dotenv()
 SECRET_KEY = os.getenv("XOsFw_ir9cwCC-liLKURVCFUPPKc7BOYzytN-CvurYA", "please-change-me")
@@ -48,6 +49,12 @@ class RegisterIn(BaseModel):
     disability_description: str | None = None
 
 
+class RoomAvailabilityIn(BaseModel):
+    day: str | None = None
+    specific_date: str | None = None # YYYY-MM-DD
+    start_time: str
+    end_time: str
+
 class RoomIn(BaseModel):
     name: str
     building: str
@@ -55,6 +62,7 @@ class RoomIn(BaseModel):
     accessibility_wheelchair: bool = False
     accessibility_visual: bool = False
     accessibility_hearing: bool = False
+    availabilities: list[RoomAvailabilityIn] | None = None
 
 
 class TokenOut(BaseModel):
@@ -86,7 +94,7 @@ class CreateTutoringSessionIn(BaseModel):
     accessibility_type: str | None = None
 
 
-@router.post("/register", response_model=dict)
+@router.post("/register", response_model=dict, tags=["Autenticación"])
 def register(payload: RegisterIn, db: Session = Depends(get_db)):
     print(f"[auth] Register attempt: university_id={payload.university_id}, email={payload.email}")
     
@@ -142,7 +150,7 @@ class LoginIn(BaseModel):
     password: str
 
 
-@router.post("/login", response_model=TokenOut)
+@router.post("/login", response_model=TokenOut, tags=["Autenticación"])
 def login(payload: LoginIn, db: Session = Depends(get_db)):
     print(f"[auth] Login attempt with university_id: {payload.university_id}")
     
@@ -192,7 +200,7 @@ def get_user_preferences(db: Session, university_id: str):
     return subjects_list, preferences
 
 
-@router.get("/me")
+@router.get("/me", tags=["Autenticación"])
 def get_current_user(
     authorization: str = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
@@ -247,7 +255,7 @@ def get_current_user(
         raise HTTPException(status_code=401, detail=f"Error: {str(e)}")
 
 
-@router.put("/preferences")
+@router.put("/preferences", tags=["Usuario / Perfil"])
 def update_preferences(
     payload: UpdatePreferencesIn,
     authorization: str = Header(None, alias="Authorization"),
@@ -308,7 +316,7 @@ def update_preferences(
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
-@router.put("/disability")
+@router.put("/disability", tags=["Usuario / Perfil"])
 def update_disability(
     payload: UpdateDisabilityIn,
     authorization: str = Header(None, alias="Authorization"),
@@ -366,7 +374,7 @@ def update_disability(
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
-@router.post("/tutor/sessions")
+@router.post("/tutor/sessions", tags=["Tutorías"])
 def create_tutoring_session(
     payload: CreateTutoringSessionIn,
     authorization: str = Header(None, alias="Authorization"),
@@ -411,7 +419,7 @@ def create_tutoring_session(
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
-@router.get("/tutor/sessions")
+@router.get("/tutor/sessions", tags=["Tutorías"])
 def get_tutor_sessions(
     authorization: str = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
@@ -441,7 +449,7 @@ def get_tutor_sessions(
     except Exception as e:
         print("[auth] ERROR getting sessions:", e)
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
-@router.get("/sessions")
+@router.get("/sessions", tags=["Tutorías"])
 def get_all_sessions(
     db: Session = Depends(get_db)
 ):
@@ -468,7 +476,7 @@ def get_all_sessions(
     except Exception as e:
         print("[auth] ERROR getting all sessions:", e)
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
-@router.post("/sessions/{session_id}/enroll")
+@router.post("/sessions/{session_id}/enroll", tags=["Tutorías"])
 def enroll_session(
     session_id: int,
     authorization: str = Header(None, alias="Authorization"),
@@ -516,7 +524,7 @@ def enroll_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/student/enrolled-sessions")
+@router.get("/student/enrolled-sessions", tags=["Tutorías"])
 def get_enrolled_sessions(
     authorization: str = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
@@ -549,7 +557,7 @@ def get_enrolled_sessions(
     except Exception as e:
         print("[auth] ERROR getting enrolled sessions:", e)
         raise HTTPException(status_code=500, detail=str(e))
-@router.delete("/sessions/{session_id}/enroll")
+@router.delete("/sessions/{session_id}/enroll", tags=["Tutorías"])
 def cancel_enrollment(
     session_id: int,
     authorization: str = Header(None, alias="Authorization"),
@@ -591,14 +599,132 @@ def cancel_enrollment(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/rooms", tags=["Salones"])
+def get_public_rooms(db: Session = Depends(get_db)):
+    rooms = db.query(Room).all()
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "building": r.building,
+            "capacity": r.capacity,
+            "available": r.available,
+            "accessibility_wheelchair": r.accessibility_wheelchair,
+            "accessibility_visual": r.accessibility_visual,
+            "accessibility_hearing": r.accessibility_hearing,
+            "availabilities": [
+                {
+                    "day": av.day, 
+                    "specific_date": av.specific_date.isoformat() if av.specific_date else None,
+                    "start_time": av.start_time, 
+                    "end_time": av.end_time
+                }
+                for av in r.availabilities
+            ]
+        } for r in rooms
+    ]
+
+@router.get("/rooms/available", tags=["Salones"])
+def get_available_rooms(
+    date: str, # YYYY-MM-DD
+    time: str, # HH:MM
+    duration: int = 60,
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna salones disponibles para un día y hora específicos.
+    Un salón es disponible si:
+    1. Está marcado como disponible globalmente (Room.available = True).
+    2. SI tiene un horario maestro definido, el intervalo debe caber en él.
+    3. SI NO tiene horario maestro definido, se considera disponible por defecto.
+    4. NO tiene ninguna sesión de tutoría que traslape en ese horario.
+    """
+    try:
+        # req_start is local time from frontend
+        req_start = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
+        req_end = req_start + timedelta(minutes=duration)
+        
+        # Day name in Spanish (CamelCase to match AdminPanel)
+        days_map = {0: "Lunes", 1: "Martes", 2: "Miercoles", 3: "Jueves", 4: "Viernes", 5: "Sabado", 6: "Domingo"}
+        day_name = days_map[req_start.weekday()]
+        
+        req_start_str = req_start.strftime("%H:%M")
+        req_end_str = req_end.strftime("%H:%M")
+
+        # 1. Obtener todos los salones marcados como disponibles
+        rooms = db.query(Room).filter(Room.available == True).all()
+        available_rooms = []
+
+        for r in rooms:
+            # 2. Verificar Horario Maestro (Admin)
+            if not r.availabilities:
+                # Si no hay reglas de horario, está abierto por defecto (retrocompatibilidad)
+                has_admin_permission = True
+            else:
+                # Si hay reglas, debe cumplir al menos una
+                has_admin_permission = False
+                for av in r.availabilities:
+                    matches_day = (av.day == day_name)
+                    matches_date = (av.specific_date == req_start.date())
+                    if matches_day or matches_date:
+                        # Comparación de strings HH:MM funciona para rangos
+                        if av.start_time <= req_start_str and av.end_time >= req_end_str:
+                            has_admin_permission = True
+                            break
+            
+            if not has_admin_permission:
+                continue
+
+            # 3. Verificar Traslapes con otras Tutorías
+            # Buscamos sesiones en este mismo salón para el mismo día
+            # (Simplificación: buscamos por nombre de salón)
+            existing_sessions = db.query(TutoringSession).filter(
+                TutoringSession.room == r.name,
+                # Filtro grueso por fecha para eficiencia (asumiendo sesiones no cruzan medianoche usualmente)
+                func.date(TutoringSession.date_time) == req_start.date()
+            ).all()
+
+            has_conflict = False
+            for s in existing_sessions:
+                s_start = s.date_time
+                s_end = s_start + timedelta(minutes=s.duration)
+                
+                # Overlap logic: (StartA < EndB) and (EndA > StartB)
+                if (req_start < s_end) and (req_end > s_start):
+                    has_conflict = True
+                    break
+            
+            if not has_conflict:
+                available_rooms.append({
+                    "id": r.id, 
+                    "name": r.name, 
+                    "building": r.building, 
+                    "capacity": r.capacity,
+                    "availabilities": [
+                        {
+                            "day": av.day, 
+                            "specific_date": av.specific_date.isoformat() if av.specific_date else None,
+                            "start_time": av.start_time, 
+                            "end_time": av.end_time
+                        }
+                        for av in r.availabilities
+                    ]
+                })
+        
+        return available_rooms
+    except Exception as e:
+        print("[rooms] ERROR checking availability:", e)
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Error en datos: {str(e)}")
+
 # --- ADMIN ENDPOINTS ---
 
-@router.get("/admin/users")
+@router.get("/admin/users", tags=["Administración"])
 def get_all_users(db: Session = Depends(get_db)):
     users = db.query(User).all()
     return [{"id": u.id, "university_id": u.university_id, "full_name": u.full_name, "email": u.email, "user_type": u.user_type, "carrera": u.carrera} for u in users]
 
-@router.delete("/admin/users/{user_id}")
+@router.delete("/admin/users/{user_id}", tags=["Administración"])
 def delete_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -609,7 +735,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Usuario eliminado correctamente"}
 
-@router.get("/admin/sessions")
+@router.get("/admin/sessions", tags=["Administración"])
 def get_all_sessions_admin(db: Session = Depends(get_db)):
     sessions = db.query(TutoringSession).all()
     return [{
@@ -622,7 +748,7 @@ def get_all_sessions_admin(db: Session = Depends(get_db)):
         "room": s.room
     } for s in sessions]
 
-@router.delete("/admin/sessions/{session_id}")
+@router.delete("/admin/sessions/{session_id}", tags=["Administración"])
 def delete_session(session_id: int, db: Session = Depends(get_db)):
     session = db.query(TutoringSession).filter(TutoringSession.id == session_id).first()
     if not session:
@@ -631,16 +757,39 @@ def delete_session(session_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Sesión eliminada"}
 
-@router.get("/admin/rooms")
+@router.get("/admin/rooms", tags=["Administración"])
 def get_rooms_admin(db: Session = Depends(get_db)):
-    from models import Room
-    return db.query(Room).all()
+    rooms = db.query(Room).all()
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "building": r.building,
+            "capacity": r.capacity,
+            "available": r.available,
+            "accessibility_wheelchair": r.accessibility_wheelchair,
+            "accessibility_visual": r.accessibility_visual,
+            "accessibility_hearing": r.accessibility_hearing,
+            "availabilities": [
+                {
+                    "day": av.day, 
+                    "specific_date": av.specific_date.isoformat() if av.specific_date else None,
+                    "start_time": av.start_time, 
+                    "end_time": av.end_time
+                }
+                for av in r.availabilities
+            ]
+        } for r in rooms
+    ]
 
-@router.post("/admin/rooms")
+@router.post("/admin/rooms", tags=["Administración"])
 def create_room(payload: RoomIn, db: Session = Depends(get_db)):
-    from models import Room
+    # Nomenclature: Block-Name (e.g. L-21)
+    block_letter = payload.building.replace("Bloque ", "")
+    full_name_formatted = f"{block_letter}-{payload.name}"
+    
     room = Room(
-        name=payload.name,
+        name=full_name_formatted,
         building=payload.building,
         capacity=payload.capacity,
         accessibility_wheelchair=payload.accessibility_wheelchair,
@@ -649,19 +798,94 @@ def create_room(payload: RoomIn, db: Session = Depends(get_db)):
     )
     db.add(room)
     try:
+        db.flush() # To get room.id
+        
+        # Save availabilities
+        if payload.availabilities:
+            for av in payload.availabilities:
+                s_date = None
+                if av.specific_date:
+                    try:
+                        s_date = datetime.strptime(av.specific_date, "%Y-%m-%d").date()
+                    except: pass
+
+                db.add(RoomAvailability(
+                    room_id=room.id,
+                    day=av.day,
+                    specific_date=s_date,
+                    start_time=av.start_time,
+                    end_time=av.end_time
+                ))
+        
         db.commit()
         db.refresh(room)
         return room
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Error al crear salón (posible nombre duplicado)")
+        raise HTTPException(status_code=400, detail=f"Error al crear salón: {str(e)}")
 
-@router.delete("/admin/rooms/{room_id}")
+@router.delete("/admin/rooms/{room_id}", tags=["Administración"])
 def delete_room(room_id: int, db: Session = Depends(get_db)):
-    from models import Room
     room = db.query(Room).filter(Room.id == room_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Salón no encontrado")
     db.delete(room)
     db.commit()
     return {"message": "Salón eliminado"}
+
+@router.get("/admin/users/{user_id}/detail", tags=["Administración"])
+def get_user_detail_admin(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    # 1. Base Info
+    res = {
+        "id": user.id,
+        "university_id": user.university_id,
+        "full_name": user.full_name,
+        "email": user.email,
+        "user_type": user.user_type,
+        "carrera": user.carrera,
+        "created_at": user.created_at.isoformat(),
+        "disability": None,
+        "history": []
+    }
+
+    # 2. Disability info
+    if user.disability:
+        res["disability"] = {
+            "type": user.disability.disability_type,
+            "description": user.disability.disability_description
+        }
+
+    # 3. History
+    if user.user_type == "tutor":
+        # Sessions created by tutor
+        sessions = db.query(TutoringSession).filter(TutoringSession.tutor_id == user_id).all()
+        for s in sessions:
+            res["history"].append({
+                "type": "created",
+                "id": s.id,
+                "subject": s.subject,
+                "date_time": s.date_time.isoformat(),
+                "room": s.room,
+                "spots": s.spots,
+                "spots_available": s.spots_available
+            })
+    else:
+        # Enrollments by student
+        enrollments = db.query(TutoringEnrollment).filter(TutoringEnrollment.student_id == user_id).all()
+        for e in enrollments:
+            s = e.session
+            if s:
+                res["history"].append({
+                    "type": "enrolled",
+                    "id": s.id,
+                    "subject": s.subject,
+                    "date_time": s.date_time.isoformat(),
+                    "room": s.room,
+                    "tutor_name": s.tutor.full_name if s.tutor else "Unknown"
+                })
+    
+    return res

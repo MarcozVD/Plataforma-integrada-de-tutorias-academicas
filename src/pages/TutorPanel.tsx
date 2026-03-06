@@ -9,9 +9,18 @@ import { Label } from "@/components/ui/label";
 const TutorPanel = () => {
     const [sessions, setSessions] = useState<any[]>([]);
     const [tutoringSubjects, setTutoringSubjects] = useState<string[]>([]);
+    const [allRooms, setAllRooms] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [creatingSession, setCreatingSession] = useState(false);
+    const [availableRooms, setAvailableRooms] = useState<any[]>([]);
+    const [fetchingAvailable, setFetchingAvailable] = useState(false);
+
+    // Selection state
+    const BLOCKS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
+    const [selectedBlock, setSelectedBlock] = useState<string>("");
+    const [isVirtual, setIsVirtual] = useState(false);
+
     const [newSession, setNewSession] = useState({
         subject: "",
         date: "",
@@ -25,10 +34,38 @@ const TutorPanel = () => {
     // Calendar state
     const [currentMonth, setCurrentMonth] = useState(new Date());
 
+    const fetchRooms = async () => {
+        try {
+            const res = await fetch("/auth/rooms");
+            if (res.ok) setAllRooms(await res.json());
+        } catch (err) { }
+    };
+
     useEffect(() => {
         fetchUserData();
         fetchSessions();
+        // fetchRooms(); // We now fetch dynamically based on date/time
     }, []);
+
+    const fetchAvailableRooms = async () => {
+        if (!newSession.date || !newSession.time) return;
+        setFetchingAvailable(true);
+        try {
+            const res = await fetch(`/auth/rooms/available?date=${newSession.date}&time=${newSession.time}&duration=${newSession.duration}`);
+            if (res.ok) {
+                const data = await res.json();
+                setAvailableRooms(data);
+            }
+        } catch (err) {
+            console.error("Error fetching available rooms:", err);
+        } finally {
+            setFetchingAvailable(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAvailableRooms();
+    }, [newSession.date, newSession.time, newSession.duration]);
 
     const fetchUserData = async () => {
         try {
@@ -233,14 +270,82 @@ const TutorPanel = () => {
                                     </div>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Salón / Link</Label>
-                                    <Input
-                                        placeholder="Aula 201 o URL"
-                                        value={newSession.room}
-                                        onChange={(e) => setNewSession({ ...newSession, room: e.target.value })}
-                                        className="h-11 border-indigo-100"
-                                    />
+                                <div className="space-y-3">
+                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ubicación de la Tutoría</Label>
+
+                                    <div className="flex gap-4 mb-2">
+                                        <Button
+                                            variant={isVirtual ? "outline" : "default"}
+                                            size="sm"
+                                            className="flex-1 rounded-xl"
+                                            onClick={() => setIsVirtual(false)}
+                                        >
+                                            En Campus
+                                        </Button>
+                                        <Button
+                                            variant={isVirtual ? "default" : "outline"}
+                                            size="sm"
+                                            className="flex-1 rounded-xl"
+                                            onClick={() => {
+                                                setIsVirtual(true);
+                                                setSelectedBlock("");
+                                                setNewSession({ ...newSession, room: "Virtual / Link" });
+                                            }}
+                                        >
+                                            Virtual
+                                        </Button>
+                                    </div>
+
+                                    {!isVirtual ? (
+                                        <div className="grid grid-cols-1 gap-3 p-3 bg-indigo-50/30 rounded-xl border border-indigo-100">
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] uppercase text-indigo-700">Filtrar por Bloque</Label>
+                                                <select
+                                                    className="w-full text-xs p-2 border rounded-md bg-white"
+                                                    value={selectedBlock}
+                                                    onChange={e => setSelectedBlock(e.target.value)}
+                                                >
+                                                    <option value="">Todos los bloques</option>
+                                                    {BLOCKS.map(b => <option key={b} value={`Bloque ${b}`}>Bloque {b}</option>)}
+                                                </select>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] uppercase text-indigo-700">
+                                                    Salón disponible ({availableRooms.filter(r => !selectedBlock || r.building === selectedBlock).length})
+                                                </Label>
+                                                <select
+                                                    className="w-full text-xs p-2 border rounded-md bg-white shadow-sm"
+                                                    disabled={!newSession.date || !newSession.time || fetchingAvailable}
+                                                    value={newSession.room}
+                                                    onChange={e => setNewSession({ ...newSession, room: e.target.value })}
+                                                >
+                                                    <option value="">{fetchingAvailable ? "Cargando..." : "Seleccionar salón..."}</option>
+                                                    {availableRooms
+                                                        .filter(r => !selectedBlock || r.building === selectedBlock)
+                                                        .map(r => (
+                                                            <option key={r.id} value={r.name}>{r.name} (Cap: {r.capacity})</option>
+                                                        ))
+                                                    }
+                                                </select>
+                                                {availableRooms.length === 0 && newSession.date && newSession.time && !fetchingAvailable && (
+                                                    <div className="bg-red-50 p-2 rounded border border-red-100 mt-2">
+                                                        <p className="text-[9px] text-red-600 font-medium">
+                                                            No hay salones disponibles en este horario.
+                                                            Verifica que el bloque seleccionado tenga salones habilitados por el admin.
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <Input
+                                            placeholder="Ingresa el link de la sesión (Zoom, Meet, etc)"
+                                            value={newSession.room === "Virtual / Link" ? "" : newSession.room}
+                                            onChange={(e) => setNewSession({ ...newSession, room: e.target.value })}
+                                            className="h-11 border-indigo-100"
+                                        />
+                                    )}
                                 </div>
 
                                 <div className="space-y-2">

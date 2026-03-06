@@ -13,7 +13,11 @@ DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAM
 engine = create_engine(DATABASE_URL)
 
 with engine.connect() as conn:
-    result = conn.execute(text("DESCRIBE room_availabilities"))
-    print("Columns in room_availabilities:")
-    for row in result:
-        print(row)
+    print("Adding specific_date column to room_availabilities...")
+    try:
+        conn.execute(text("ALTER TABLE room_availabilities ADD COLUMN specific_date DATE NULL"))
+        conn.execute(text("ALTER TABLE room_availabilities MODIFY COLUMN day VARCHAR(20) NULL"))
+        conn.commit()
+        print("Migration successful")
+    except Exception as e:
+        print(f"Error: {e}")

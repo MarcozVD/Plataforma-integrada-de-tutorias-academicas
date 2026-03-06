@@ -1,13 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import RoomCard from "@/components/RoomCard";
-import { rooms } from "@/data/mockData";
-
 const Rooms = () => {
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
@@ -17,8 +17,30 @@ const Rooms = () => {
     hearing: false
   });
 
+  useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        const res = await fetch("/auth/rooms");
+        if (res.ok) {
+          const data = await res.json();
+          setRooms(data);
+        }
+      } catch (err) {
+        console.error("Error fetching rooms:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRooms();
+  }, []);
+
   const filtered = useMemo(() => {
     return rooms.filter((r) => {
+      // API uses accessibility_wheelchair etc directly
+      const hasWheelchair = r.accessibility_wheelchair;
+      const hasVisual = r.accessibility_visual;
+      const hasHearing = r.accessibility_hearing;
+
       // Filtro por búsqueda
       const matchSearch =
         r.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -29,13 +51,13 @@ const Rooms = () => {
 
       // Filtro por accesibilidad
       const matchAccess =
-        (!accessFilters.wheelchair || r.accessibility.wheelchair) &&
-        (!accessFilters.visual || r.accessibility.visualSupport) &&
-        (!accessFilters.hearing || r.accessibility.hearingSupport);
+        (!accessFilters.wheelchair || hasWheelchair) &&
+        (!accessFilters.visual || hasVisual) &&
+        (!accessFilters.hearing || hasHearing);
 
       return matchSearch && matchAvailable && matchAccess;
     });
-  }, [search, onlyAvailable, accessFilters]);
+  }, [rooms, search, onlyAvailable, accessFilters]);
 
   // Contador de filtros activos
   const activeFiltersCount = [
@@ -127,14 +149,34 @@ const Rooms = () => {
         </div>
       )}
 
-      {/* Results */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((r) => <RoomCard key={r.id} room={r} />)}
+      {/* Results grouped by blocks */}
+      <div className="space-y-12">
+        {Array.from(new Set(filtered.map(r => r.building))).sort().map(block => (
+          <div key={block} className="space-y-6">
+            <div className="flex items-center gap-3 border-b-2 border-indigo-100 pb-2">
+              <div className="bg-indigo-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm">
+                {block}
+              </div>
+              <h2 className="text-xl font-bold text-indigo-900">
+                {filtered.filter(r => r.building === block).length} {filtered.filter(r => r.building === block).length === 1 ? 'Salón' : 'Salones'} en este bloque
+              </h2>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filtered.filter(r => r.building === block).map((r) => (
+                <RoomCard key={r.id} room={r} />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
+
       {filtered.length === 0 && (
-        <p className="text-center text-muted-foreground py-12">
-          No se encontraron salones con los filtros seleccionados.
-        </p>
+        <div className="text-center py-20 bg-muted/20 rounded-2xl border-2 border-dashed">
+          <Search className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-10" />
+          <p className="text-muted-foreground font-medium">
+            No se encontraron salones con los filtros seleccionados.
+          </p>
+        </div>
       )}
     </main>
   );

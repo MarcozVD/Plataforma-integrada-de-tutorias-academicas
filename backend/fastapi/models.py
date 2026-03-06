@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, func, Text, ForeignKey, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Date, func, Text, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from db import Base
 
@@ -106,3 +106,17 @@ class Room(Base):
     accessibility_visual = Column(Boolean, default=False)
     accessibility_hearing = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
+
+    availabilities = relationship("RoomAvailability", back_populates="room", cascade="all, delete-orphan")
+
+
+class RoomAvailability(Base):
+    __tablename__ = "room_availabilities"
+    id = Column(Integer, primary_key=True, index=True)
+    room_id = Column(Integer, ForeignKey("rooms.id"), nullable=False, index=True)
+    day = Column(String(20), nullable=True) # E.g. Lunes. If null, use specific_date.
+    specific_date = Column(Date, nullable=True) # Specific date if needed.
+    start_time = Column(String(5), nullable=False)
+    end_time = Column(String(5), nullable=False)
+
+    room = relationship("Room", back_populates="availabilities")

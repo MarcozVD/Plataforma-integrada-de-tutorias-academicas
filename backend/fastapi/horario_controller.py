@@ -7,7 +7,7 @@ import datetime
 HORARIOS_DIR = Path(__file__).parent / "horarios"
 HORARIOS_DIR.mkdir(parents=True, exist_ok=True)
 
-router = APIRouter()
+router = APIRouter(tags=["Manejo de Horario"])
 
 class Bloque(BaseModel):
     day: str

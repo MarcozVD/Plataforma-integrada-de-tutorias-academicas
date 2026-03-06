@@ -1,73 +1,110 @@
-# Welcome to your Lovable project
+# Plataforma Integrada de Tutorías Académicas 🎓
 
-## Project info
+Una solución web moderna y robusta diseñada para centralizar y optimizar la gestión de tutorías académicas universitarias. Esta plataforma conecta a estudiantes con tutores, facilitando la programación de sesiones, la reserva de espacios físicos adaptados y el seguimiento académico.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## 🌟 Características Principales
 
-## How can I edit this code?
+### 👤 Gestión de Usuarios y Roles
+- **Sistema de Autenticación**: Registro e inicio de sesión seguro mediante JWT.
+- **Roles Diferenciados**:
+  - **Estudiantes**: Pueden inscribirse en tutorías, gestionar sus preferencias académicas y ver su historial.
+  - **Tutores**: Capacidad para crear sesiones de tutoría, gestionar horarios y visualizar sus inscritos.
+  - **Administradores**: Control total sobre la infraestructura (bloques, salones) y supervisión del sistema.
 
-There are several ways of editing your application.
+### 📅 Programación y Tutorías
+- **Gestión de Sesiones**: Creación de tutorías con especificación de materia, fecha, hora, duración y cupos.
+- **Inscripción Inteligente**: Los estudiantes pueden buscar y anotarse en tutorías disponibles según sus intereses.
+- **Control de Conflictos**: Algoritmo que verifica la disponibilidad horaria del estudiante antes de permitir una inscripción.
+- **Historial de Actividad**: Seguimiento detallado de tutorías pasadas y futuras.
 
-**Use Lovable**
+### 🏛️ Gestión de Espacios (Salones)
+- **Inventario Detallado**: Registro de bloques universitarios y salones con capacidad específica.
+- **Filtros de Accesibilidad**: Soporte para identificar salones con acceso para sillas de ruedas, ayudas visuales y auditivas.
+- **Disponibilidad Dinámica**: Los administradores pueden definir horarios de disponibilidad recurrentes o fechas específicas para cada salón.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+### ♿ Inclusión y Accesibilidad
+- **Perfiles Sensibles**: Registro opcional de tipos de discapacidad para asegurar que las tutorías se asignen a espacios adecuados.
+- **Preferencias Personalizadas**: Los estudiantes pueden marcar sus materias de interés para recibir una experiencia más personalizada.
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
+## 🛠️ Tecnologías Utilizadas
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Frontend
+- **React 18** (Vite)
+- **TypeScript** para un desarrollo tipado y seguro.
+- **Tailwind CSS** para un diseño moderno y responsivo.
+- **shadcn/ui** para componentes de interfaz de usuario consistentes y accesibles.
+- **Lucide React** para iconografía.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Backend
+- **FastAPI** (Python 3.10+) para una API de alto rendimiento.
+- **SQLAlchemy** como ORM para la gestión de base de datos.
+- **Pydantic** para la validación de esquemas de datos.
+- **Mysql** como base de datos por defecto (fácil de migrar a PostgreSQL/SQL Server).
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## 🚀 Instalación y Configuración
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+### 1. Clonar el repositorio
+```bash
+git clone https://github.com/MarcozVD/Plataforma-integrada-de-tutorias-academicas.git
+cd Plataforma-integrada-de-tutorias-academicas
 ```
 
-**Edit a file directly in GitHub**
+### 2. Configuración del Backend (FastAPI)
+Es recomendable usar un entorno virtual:
+```bash
+cd backend/fastapi
+python -m venv .venv
+# En Windows:
+.\.venv\Scripts\Activate.ps1
+# En Linux/macOS:
+source .venv/bin/activate
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+pip install -r requirements.txt
+# El servidor iniciará y creará la base de datos automáticamente
+python main.py
+```
+*El backend estará disponible en `http://127.0.0.1:8000`*
 
-**Use GitHub Codespaces**
+### 3. Configuración del Frontend (React)
+Asegúrate de tener **Node.js** instalado:
+```bash
+# Regresar a la raíz del proyecto
+npm install
+npm run dev
+```
+*El frontend estará disponible en `http://localhost:8080` (o el puerto que asigne Vite)*
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+---
 
-## What technologies are used for this project?
+## 📁 Estructura del Proyecto
 
-This project is built with:
+```text
+├── backend/
+│   └── fastapi/
+│       ├── auth_controller.py     # Lógica de usuarios y sesiones
+│       ├── horario_controller.py  # Gestión de calendarios
+│       ├── models.py              # Definición de tablas de BD
+│       ├── main.py                # Punto de entrada del servidor
+│       └── db.py                  # Configuración de base de datos
+├── src/
+│   ├── components/                # Componentes reutilizables de UI
+│   ├── pages/                     # Vistas principales (Admin/Tutor/Estudiante)
+│   ├── hooks/                     # Custom hooks de React
+│   └── App.tsx                    # Enrutamiento principal
+├── public/                        # Activos estáticos
+└── tailwind.config.ts             # Configuración de estilos
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+## 📝 Notas de Desarrollo
+- La plataforma utiliza una arquitectura separada (Frontend desacoplado del Backend).
+- La base de datos se inicializa automáticamente al arrancar el backend por primera vez.
+- Para producción, se recomienda configurar variables de entorno para la `SECRET_KEY` de seguridad.
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+---
+*Desarrollado para mejorar la experiencia educativa universitaria.*
