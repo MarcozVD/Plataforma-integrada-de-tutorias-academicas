@@ -19,10 +19,20 @@ const queryClient = new QueryClient();
 
 import TutorPanel from "./pages/TutorPanel";
 import AdminPanel from "./pages/AdminPanel";
+import { ChatWidget } from "./components/chat/ChatWidget";
+import { useEffect, useState } from "react";
 
 const AppLayout = () => {
   const location = useLocation();
   const isAuthPage = location.pathname === "/" || location.pathname === "/register";
+  
+  // To react to login changes in localStorage across routes
+  const [isStudent, setIsStudent] = useState(false);
+  
+  useEffect(() => {
+    const userType = localStorage.getItem("userType");
+    setIsStudent(userType === "student");
+  }, [location.pathname]);
 
   return (
     <>
@@ -41,6 +51,9 @@ const AppLayout = () => {
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      
+      {/* Muestra el Chat automatizado solo si es estudiante y no está en la pantalla de login/registro */}
+      {!isAuthPage && isStudent && <ChatWidget />}
     </>
   );
 };
