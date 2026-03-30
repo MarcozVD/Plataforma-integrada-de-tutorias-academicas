@@ -9,11 +9,31 @@ const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [userType, setUserType] = useState<string>("");
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    // Cargar tipo de usuario del localStorage
     const storedUserType = localStorage.getItem("userType") || "student";
     setUserType(storedUserType);
+
+    if (storedUserType === "student") {
+      const fetchNotifs = async () => {
+        try {
+          const token = localStorage.getItem("token");
+          if (!token) return;
+          const res = await fetch("/auth/student/notifications", {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const saved = localStorage.getItem('pita_read_notifs');
+            const readIds = saved ? JSON.parse(saved) : [];
+            const unread = data.filter((n: any) => !readIds.includes(n.id)).length;
+            setUnreadCount(unread);
+          }
+        } catch (err) { console.error("Error fetching header notifs", err); }
+      };
+      fetchNotifs();
+    }
   }, [location.pathname]);
 
   const handleLogout = () => {
@@ -39,7 +59,9 @@ const Header = () => {
   // Navegación para administradores
   const adminNavItems = [
     { path: "/admin", label: "Panel Admin" },
-    { path: "/rooms", label: "Salones" },
+    { path: "/admin#usuarios", label: "Usuarios" },
+    { path: "/admin#tutorias", label: "Tutorías" },
+    { path: "/admin#salones", label: "Salones" },
   ];
 
   // Usar la navegación según el tipo de usuario
@@ -50,7 +72,7 @@ const Header = () => {
   return (
     <header className="sticky top-0 z-50 bg-primary text-primary-foreground shadow-lg">
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
-        <Link to="/index" className="flex items-center gap-2 font-bold text-lg">
+        <Link to={userType === "admin" ? "/admin" : "/index"} className="flex items-center gap-2 font-bold text-lg">
           <GraduationCap className="h-7 w-7" />
           <span className="hidden sm:inline">Tutorías Académicas</span>
           <span className="sm:hidden">PITA</span>
@@ -72,19 +94,25 @@ const Header = () => {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link to="/notifications" aria-label="Notificaciones">
-            <Button variant="ghost" size="icon" className="relative text-primary-foreground hover:bg-primary-foreground/10">
-              <Bell className="h-5 w-5" />
-              <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-warning text-warning-foreground text-xs border-0">
-                2
-              </Badge>
-            </Button>
-          </Link>
-          <Link to={profilePath} aria-label="Perfil">
-            <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
-              <User className="h-5 w-5" />
-            </Button>
-          </Link>
+          {userType !== "admin" && (
+            <>
+              <Link to="/notifications" aria-label="Notificaciones">
+                <Button variant="ghost" size="icon" className="relative text-primary-foreground hover:bg-primary-foreground/10">
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-warning text-warning-foreground text-xs border-0 rounded-full animate-bounce">
+                      {unreadCount}
+                    </Badge>
+                  )}
+                </Button>
+              </Link>
+              <Link to={profilePath} aria-label="Perfil">
+                <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
+                  <User className="h-5 w-5" />
+                </Button>
+              </Link>
+            </>
+          )}
           <Button
             variant="ghost"
             size="icon"

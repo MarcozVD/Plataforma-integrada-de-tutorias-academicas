@@ -13,6 +13,8 @@ const TutorPanel = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [creatingSession, setCreatingSession] = useState(false);
+    const [selectedSessionStudents, setSelectedSessionStudents] = useState<any[] | null>(null);
+    const [fetchingStudents, setFetchingStudents] = useState(false);
     const [availableRooms, setAvailableRooms] = useState<any[]>([]);
     const [fetchingAvailable, setFetchingAvailable] = useState(false);
 
@@ -144,6 +146,25 @@ const TutorPanel = () => {
             setError("Error al crear la sesión");
         } finally {
             setCreatingSession(false);
+        }
+    };
+
+    const handleViewStudents = async (sessionId: number) => {
+        setFetchingStudents(true);
+        setSelectedSessionStudents([]);
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`/auth/tutor/sessions/${sessionId}/students`, {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setSelectedSessionStudents(data);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setFetchingStudents(false);
         }
     };
 
@@ -395,9 +416,14 @@ const TutorPanel = () => {
                                                 </Badge>
                                             )}
                                         </div>
-                                        <Badge variant="secondary" className="px-3 py-1 bg-indigo-50 text-indigo-700 font-bold border-indigo-100">
-                                            {s.spots_available}/{s.spots} cupos
-                                        </Badge>
+                                        <div className="flex flex-col items-end gap-2">
+                                            <Badge variant="secondary" className="px-3 py-1 bg-indigo-50 text-indigo-700 font-bold border-indigo-100">
+                                                {s.spots_available}/{s.spots} cupos
+                                            </Badge>
+                                            <Button variant="outline" size="sm" onClick={() => handleViewStudents(s.id)} className="h-8 text-xs border-indigo-200 text-indigo-600 hover:bg-indigo-50">
+                                                <Users className="h-3 w-3 mr-1" /> Ver Inscritos
+                                            </Button>
+                                        </div>
                                     </CardContent>
                                 </Card>
                             ))}
@@ -436,6 +462,49 @@ const TutorPanel = () => {
                     </Card>
                 </div>
             </div>
+
+            {/* Students Modal */}
+            {selectedSessionStudents !== null && (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setSelectedSessionStudents(null) }}>
+                    <Card className="w-full max-w-lg shadow-2xl animate-in fade-in zoom-in-95">
+                        <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
+                            <CardTitle className="flex items-center gap-2">
+                                <Users className="h-5 w-5 text-indigo-600" />
+                                Estudiantes Inscritos
+                            </CardTitle>
+                            <Button variant="ghost" size="icon" onClick={() => setSelectedSessionStudents(null)} className="h-8 w-8 rounded-full">
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="max-h-[60vh] overflow-y-auto p-4 space-y-3">
+                            {fetchingStudents ? (
+                                <p className="text-center text-muted-foreground py-8">Cargando estudiantes...</p>
+                            ) : selectedSessionStudents.length === 0 ? (
+                                <p className="text-center text-muted-foreground py-8 italic bg-muted/20 rounded-xl border border-dashed">
+                                    No hay estudiantes inscritos aún
+                                </p>
+                            ) : (
+                                selectedSessionStudents.map(student => (
+                                    <div key={student.id} className="flex items-center justify-between p-3 rounded-xl border border-indigo-50 bg-indigo-50/20 hover:bg-indigo-50/50 transition-colors">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold">
+                                                {student.full_name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-sm">{student.full_name}</p>
+                                                <p className="text-xs text-muted-foreground">{student.email}</p>
+                                            </div>
+                                        </div>
+                                        {student.carrera && (
+                                            <Badge variant="secondary" className="text-[10px]">{student.carrera}</Badge>
+                                        )}
+                                    </div>
+                                ))
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </main>
     );
 };

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Users, BookOpen, Building2, Trash2, Plus, ShieldCheck, Loader2, MapPin, Accessibility, Check, X, Eye, History as HistoryIcon, User as UserIcon, Calendar, Filter } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const AdminPanel = () => {
     const { toast } = useToast();
+    const location = useLocation();
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState("users");
     const [users, setUsers] = useState<any[]>([]);
     const [sessions, setSessions] = useState<any[]>([]);
     const [rooms, setRooms] = useState<any[]>([]);
@@ -45,6 +48,14 @@ const AdminPanel = () => {
     });
 
     const [availabilityType, setAvailabilityType] = useState<"recurring" | "specific">("recurring");
+
+    useEffect(() => {
+        const hash = location.hash.replace('#', '');
+        if (hash === 'usuarios' || hash === 'users') setActiveTab('users');
+        else if (hash === 'tutorias' || hash === 'sessions') setActiveTab('sessions');
+        else if (hash === 'salones' || hash === 'rooms') setActiveTab('rooms');
+        else if (!hash) setActiveTab('users');
+    }, [location.hash]);
 
     useEffect(() => {
         fetchAllData();
@@ -194,12 +205,11 @@ const AdminPanel = () => {
                 </div>
             </div>
 
-            <Tabs defaultValue="users" className="space-y-6">
-                <TabsList className="bg-muted/50 p-1">
-                    <TabsTrigger value="users" className="gap-2 px-6"><Users className="h-4 w-4" /> Usuarios</TabsTrigger>
-                    <TabsTrigger value="sessions" className="gap-2 px-6"><BookOpen className="h-4 w-4" /> Tutorías</TabsTrigger>
-                    <TabsTrigger value="rooms" className="gap-2 px-6"><Building2 className="h-4 w-4" /> Salones</TabsTrigger>
-                </TabsList>
+            <Tabs value={activeTab} onValueChange={(val) => {
+                setActiveTab(val);
+                const hashMap: Record<string, string> = { users: 'usuarios', sessions: 'tutorias', rooms: 'salones' };
+                window.history.pushState(null, '', `#${hashMap[val]}`);
+            }} className="space-y-6">
 
                 {/* --- USERS TAB --- */}
                 <TabsContent value="users">
@@ -330,7 +340,10 @@ const AdminPanel = () => {
                                         </div>
 
                                         <div className="space-y-3 pt-4 border-t">
-                                            <Label className="text-xs font-bold text-muted-foreground uppercase">Horarios Libres (Disponibilidad)</Label>
+                                            <div>
+                                                <Label className="text-xs font-bold text-muted-foreground uppercase">Horarios Regulares (Opcional)</Label>
+                                                <p className="text-[10px] text-muted-foreground mt-0.5">Si no agregas horarios, el salón estará habilitado para cualquier hora (sujeto a cruces con otras tutorías).</p>
+                                            </div>
 
                                             <div className="flex gap-2 p-1 bg-muted rounded-lg mb-2">
                                                 <Button

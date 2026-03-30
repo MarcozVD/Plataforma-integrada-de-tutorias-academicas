@@ -16,6 +16,8 @@ interface ScheduleBlock {
   endTime: string;
   subject: string;
   isTutoring?: boolean;
+  isPast?: boolean;
+  session_id?: number;
 }
 
 const allDays = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -84,14 +86,18 @@ const Schedule = () => {
       const eh = endDt.getHours().toString().padStart(2, '0');
       const em = endDt.getMinutes().toString().padStart(2, '0');
       const endTime = `${eh}:${em}`;
+      
+      const isPast = dt < new Date();
 
       return {
         id: `enroll-${s.id}`,
+        session_id: s.id,
         day,
         subject: `[TUT] ${s.subject}`,
         startTime,
         endTime,
-        isTutoring: true
+        isTutoring: true,
+        isPast
       };
     });
     return [...userSchedule, ...enrollmentBlocks];
@@ -186,9 +192,24 @@ const Schedule = () => {
     setNewBlock({ day: "Lunes", subject: "", startTime: "08:00", endTime: "09:00" });
   };
 
-  const handleRemoveBlock = (id: string) => {
-    if (id.startsWith('enroll-')) {
-      alert("Para cancelar una inscripción usa la pestaña de 'Mis Tutorías' (próximamente)");
+  const handleRemoveBlock = async (id: string, sessionId?: number) => {
+    if (id.startsWith('enroll-') && sessionId) {
+      if (!confirm("¿Estás seguro de que deseas cancelar esta tutoría? El cupo quedará disponible para otro estudiante.")) return;
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`/auth/sessions/${sessionId}/enroll`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (response.ok) {
+          fetchEnrolledSessions();
+          fetchAllSessions();
+        } else {
+          alert("No se pudo cancelar la tutoría.");
+        }
+      } catch (err) {
+        alert("Error de conexión");
+      }
       return;
     }
     setUserSchedule(userSchedule.filter((b) => b.id !== id));
@@ -368,7 +389,7 @@ const Schedule = () => {
                       return (
                         <div
                           key={block.id}
-                          className={`absolute left-1 right-1 rounded p-2 text-xs overflow-hidden shadow-md flex flex-col justify-between hover:shadow-lg transition z-10 ${block.isTutoring ? 'bg-indigo-600 text-white' : 'bg-blue-500 text-white'}`}
+                          className={`absolute left-1 right-1 rounded p-2 text-xs overflow-hidden shadow-md flex flex-col justify-between hover:shadow-lg transition z-10 ${block.isTutoring ? 'bg-indigo-600 text-white' : 'bg-blue-500 text-white'} ${block.isPast ? 'opacity-60 grayscale' : ''}`}
                           style={{
                             top: `${topPercent}%`,
                             height: `${heightPercent}%`,
@@ -376,17 +397,20 @@ const Schedule = () => {
                           }}
                         >
                           <div>
-                            <div className="font-bold text-[10px] md:text-sm line-clamp-2">{block.subject}</div>
+                            <div className="font-bold text-[10px] md:text-sm line-clamp-2">
+                              {block.subject}
+                              {block.isPast && <span className="ml-1 text-[8px] bg-white/20 px-1 rounded">Finalizada</span>}
+                            </div>
                             <div className="text-[9px] md:text-xs opacity-90">
                               {block.startTime} - {block.endTime}
                             </div>
                           </div>
-                          {!block.isTutoring && (
+                          {!block.isPast && (
                             <button
-                              onClick={() => handleRemoveBlock(block.id)}
+                              onClick={() => handleRemoveBlock(block.id, block.session_id)}
                               className="text-red-300 hover:text-red-100 text-[10px] self-start mt-1"
                             >
-                              Eliminar
+                              {block.isTutoring ? "Cancelar" : "Eliminar"}
                             </button>
                           )}
                         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Calendar, MapPin, User, Star, Sparkles, Loader2, XCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,36 +7,43 @@ import { Button } from "@/components/ui/button";
 import RecommendationCard from "@/components/RecommendationCard";
 import { useToast } from "@/components/ui/use-toast";
 
-const pastRooms = [
-  { id: "1", name: "Aula 201", building: "Edificio A", visits: 5 },
-  { id: "2", name: "Lab 102", building: "Edificio C", visits: 3 },
-  { id: "3", name: "Aula 305", building: "Edificio B", visits: 2 },
-];
-
 const History = () => {
   const [sessions, setSessions] = useState<any[]>([]);
+  const [availableTutorings, setAvailableTutorings] = useState<any[]>([]);
+  const [allRooms, setAllRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchSessions();
+    const loadAll = async () => {
+      await Promise.all([fetchSessions(), fetchTutorings(), fetchRooms()]);
+      setLoading(false);
+    };
+    loadAll();
   }, []);
 
   const fetchSessions = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("/auth/student/enrolled-sessions", {
+      const res = await fetch("/auth/student/enrolled-sessions", {
         headers: { "Authorization": `Bearer ${token}` }
       });
-      if (response.ok) {
-        const data = await response.json();
-        setSessions(data);
-      }
-    } catch (err) {
-      console.error("Error fetching sessions:", err);
-    } finally {
-      setLoading(false);
-    }
+      if (res.ok) setSessions(await res.json());
+    } catch (err) { console.error(err); }
+  };
+
+  const fetchTutorings = async () => {
+    try {
+      const res = await fetch("/auth/sessions");
+      if (res.ok) setAvailableTutorings(await res.json());
+    } catch (err) { console.error(err); }
+  };
+
+  const fetchRooms = async () => {
+    try {
+      const res = await fetch("/auth/rooms");
+      if (res.ok) setAllRooms(await res.json());
+    } catch (err) { console.error(err); }
   };
 
   const handleCancel = async (sessionId: number) => {
@@ -64,22 +71,81 @@ const History = () => {
     return new Date(dateStr) < new Date();
   };
 
+  // Calcula reportes basados en la actividad
+  const insights = useMemo(() => {
+    const pastSessions = sessions.filter(s => isPast(s.date_time));
+    
+    // Top Subject
+    const subjectCounts = sessions.reduce((acc: any, s: any) => {
+        acc[s.subject] = (acc[s.subject] || 0) + 1;
+        return acc;
+    }, {});
+    const topSubject = Object.keys(subjectCounts).sort((a, b) => subjectCounts[b] - subjectCounts[a])[0];
+
+    // Recommendation
+    const recommendedSession = availableTutorings.find(t => 
+        t.subject === topSubject && 
+        new Date(t.date_time) > new Date() &&
+        !sessions.some(s => s.id === t.id)
+    );
+
+    // Top Rooms
+    const roomCounts = pastSessions.reduce((acc: any, s: any) => {
+        if (s.room) acc[s.room] = (acc[s.room] || 0) + 1;
+        return acc;
+    }, {});
+    
+    const sortedRooms = Object.entries(roomCounts)
+        .sort((a: any, b: any) => b[1] - a[1])
+        .slice(0, 6)
+        .map(([roomName, count]) => {
+            const roomData = allRooms.find(r => r.name === roomName) || { building: 'Campus' };
+            return { id: roomName, name: roomName, building: roomData.building, visits: count as number };
+        });
+
+    return { topSubject, recommendedSession, sortedRooms };
+  }, [sessions, availableTutorings, allRooms]);
+
   return (
     <main className="container mx-auto px-4 py-8 max-w-[1600px]">
       <h1 className="text-3xl font-bold mb-1">Mis Tutorías</h1>
       <p className="text-muted-foreground mb-8 text-lg">Historial y gestión de tus inscripciones académicas</p>
 
       {/* Recommendations */}
-      <section className="mb-10" aria-labelledby="hist-recs">
-        <h2 id="hist-recs" className="text-xl font-semibold flex items-center gap-2 mb-4 text-indigo-900">
-          <Sparkles className="h-6 w-6 text-indigo-600" /> Basado en tu actividad
-        </h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <RecommendationCard title="Repetir tutoría de Cálculo I" reason="Sueles asistir a sesiones de esta materia" />
-          <RecommendationCard title="Aula 201 disponible mañana" reason="Es el salón que más has visitado este semestre" />
-          <RecommendationCard title="Nueva tutoría de Álgebra" reason="Hay cupos disponibles para mañana en la tarde" />
-        </div>
-      </section>
+      {!loading && sessions.length > 0 && (
+        <section className="mb-10" aria-labelledby="hist-recs">
+          <h2 id="hist-recs" className="text-xl font-semibold flex items-center gap-2 mb-4 text-indigo-900">
+            <Sparkles className="h-6 w-6 text-indigo-600" /> Basado en tu actividad
+          </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {insights.recommendedSession ? (
+              <RecommendationCard 
+                title={`Nueva tutoría de ${insights.topSubject}`} 
+                reason={`Hay cupos el ${new Date(insights.recommendedSession.date_time).toLocaleDateString()} a las ${new Date(insights.recommendedSession.date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`} 
+              />
+            ) : (
+              <RecommendationCard 
+                title={insights.topSubject ? `Sueles asistir a ${insights.topSubject}` : "Explora nuevas tutorías"} 
+                reason="No hay nuevas sesiones programadas por ahora." 
+              />
+            )}
+            
+            {insights.sortedRooms.length > 0 ? (
+              <RecommendationCard 
+                title={`${insights.sortedRooms[0].name} es tu favorito`} 
+                reason={`Es el salón que más has visitado este semestre (${insights.sortedRooms[0].visits} veces).`} 
+              />
+            ) : (
+              <RecommendationCard title="Tu historial de salones" reason="Pronto identificaremos tus lugares de estudio favoritos." />
+            )}
+            
+            <RecommendationCard 
+              title={`Has asistido a ${sessions.filter(s => isPast(s.date_time)).length} sesiones`} 
+              reason="¡Sigue así manteniendo tu ritmo de estudio y mejorando tus notas!" 
+            />
+          </div>
+        </section>
+      )}
 
       <Tabs defaultValue="tutorings" className="space-y-6">
         <TabsList className="bg-muted/50 p-1">
@@ -96,7 +162,7 @@ const History = () => {
           ) : sessions.length === 0 ? (
             <div className="text-center py-20 bg-muted/20 rounded-2xl border-2 border-dashed">
               <p className="text-muted-foreground mb-4">Aún no te has inscrito en ninguna tutoría.</p>
-              <Button onClick={() => window.location.href = "/index"} variant="outline">Explorar tutorías disponibles</Button>
+              <Button onClick={() => window.location.href = "/"} variant="outline">Explorar tutorías disponibles</Button>
             </div>
           ) : (
             <div className="grid gap-4">
@@ -146,26 +212,37 @@ const History = () => {
         </TabsContent>
 
         <TabsContent value="rooms">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {pastRooms.map((r) => (
-              <Card key={r.id} className="hover:border-indigo-100 transition-colors">
-                <CardContent className="p-5 flex items-center justify-between">
-                  <div className="flex gap-3 items-center">
-                    <div className="bg-indigo-50 p-2 rounded-lg">
-                      <MapPin className="h-5 w-5 text-indigo-600" />
+          {loading ? (
+             <div className="flex flex-col items-center py-20 text-muted-foreground">
+               <Loader2 className="h-10 w-10 animate-spin mb-4 text-indigo-600" />
+               <p>Cargando información...</p>
+             </div>
+          ) : insights.sortedRooms.length === 0 ? (
+             <div className="text-center py-20 bg-muted/20 rounded-2xl border-2 border-dashed">
+               <p className="text-muted-foreground">Todavía no tienes un historial de salones visitados.</p>
+             </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {insights.sortedRooms.map((r: any) => (
+                <Card key={r.id} className="hover:border-indigo-100 transition-colors">
+                  <CardContent className="p-5 flex items-center justify-between">
+                    <div className="flex gap-3 items-center">
+                      <div className="bg-indigo-50 p-2 rounded-lg">
+                        <MapPin className="h-5 w-5 text-indigo-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-indigo-900">{r.name}</h3>
+                        <p className="text-sm text-muted-foreground">{r.building}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-bold text-indigo-900">{r.name}</h3>
-                      <p className="text-sm text-muted-foreground">{r.building}</p>
-                    </div>
-                  </div>
-                  <Badge variant="secondary" className="h-7 px-3 flex items-center gap-1 bg-white border">
-                    <Star className="h-3 w-3 text-amber-500 fill-amber-500" /> {r.visits} visitas
-                  </Badge>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    <Badge variant="secondary" className="h-7 px-3 flex items-center gap-1 bg-white border">
+                      <Star className="h-3 w-3 text-amber-500 fill-amber-500" /> {r.visits} visita{r.visits !== 1 && 's'}
+                    </Badge>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </main>

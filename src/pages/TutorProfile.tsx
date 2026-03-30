@@ -39,6 +39,7 @@ const TutorProfile = () => {
 
   const [tutoringSubjects, setTutoringSubjects] = useState<string[]>([]);
   const [newSubject, setNewSubject] = useState("");
+  const [customSubject, setCustomSubject] = useState("");
   const [tutoringPreferences, setTutoringPreferences] = useState({
     morning: false,
     afternoon: false,
@@ -106,9 +107,11 @@ const TutorProfile = () => {
   };
 
   const handleAddSubject = () => {
-    if (newSubject.trim() && !tutoringSubjects.includes(newSubject.trim())) {
-      setTutoringSubjects([...tutoringSubjects, newSubject.trim()]);
+    const subjectToAdd = newSubject === "custom" ? customSubject.trim() : newSubject.trim();
+    if (subjectToAdd && !tutoringSubjects.includes(subjectToAdd)) {
+      setTutoringSubjects([...tutoringSubjects, subjectToAdd]);
       setNewSubject("");
+      setCustomSubject("");
       setHasChanges(true);
     }
   };
@@ -270,8 +273,8 @@ const TutorProfile = () => {
                 </div>
                 {newSubject === "custom" && (
                   <div className="flex gap-2 mt-2">
-                    <Input placeholder="Escribe la materia..." onChange={(e) => setNewSubject(e.target.value)} className="h-11" />
-                    <Button onClick={handleAddSubject} variant="secondary" className="h-11">Aceptar</Button>
+                    <Input placeholder="Escribe la materia..." value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} className="h-11" autoFocus />
+                    <Button onClick={handleAddSubject} disabled={!customSubject.trim()} variant="secondary" className="h-11">Aceptar</Button>
                   </div>
                 )}
               </div>

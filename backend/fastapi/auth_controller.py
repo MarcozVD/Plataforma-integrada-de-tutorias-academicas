@@ -449,14 +449,59 @@ def get_tutor_sessions(
     except Exception as e:
         print("[auth] ERROR getting sessions:", e)
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@router.get("/tutor/sessions/{session_id}/students", tags=["Tutorías"])
+def get_session_students(
+    session_id: int,
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Obtiene los estudiantes inscritos en una sesión específica de un tutor"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    
+    try:
+        from models import TutoringEnrollment, User
+        token = authorization.replace("Bearer ", "")
+        payload_jwt = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload_jwt.get("sub"))
+        
+        session = db.query(TutoringSession).filter(TutoringSession.id == session_id).first()
+        if not session or session.tutor_id != user_id:
+            raise HTTPException(status_code=403, detail="No autorizado para ver esta sesión")
+            
+        enrollments = db.query(TutoringEnrollment).filter(TutoringEnrollment.session_id == session_id).all()
+        student_ids = [e.student_id for e in enrollments]
+        
+        if not student_ids:
+            return []
+            
+        students = db.query(User).filter(User.id.in_(student_ids)).all()
+        
+        return [
+            {
+                "id": s.id,
+                "full_name": s.full_name,
+                "email": s.email,
+                "carrera": s.carrera
+            } for s in students
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("[auth] ERROR getting session students:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/sessions", tags=["Tutorías"])
 def get_all_sessions(
     db: Session = Depends(get_db)
 ):
     """Retorna todas las sesiones de tutoría disponibles"""
     try:
-        # Podríamos filtrar por fecha >= hoy en el futuro
-        sessions = db.query(TutoringSession).all()
+        # Filtrar por fecha >= hoy
+        sessions = db.query(TutoringSession).filter(TutoringSession.date_time >= datetime.now()).all()
         
         result = []
         for s in sessions:
@@ -598,6 +643,55 @@ def cancel_enrollment(
         print("[auth] ERROR cancelling enrollment:", e)
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/student/notifications", tags=["Estudiantes"])
+def get_student_notifications(
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Genera notificaciones dinámicas basadas en la actividad del estudiante"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    
+    try:
+        from datetime import datetime
+        token = authorization.replace("Bearer ", "")
+        payload_jwt = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload_jwt.get("sub"))
+        
+        enrollments = db.query(TutoringEnrollment).filter(TutoringEnrollment.student_id == user_id).all()
+        
+        notifications = []
+        now = datetime.now()
+        
+        for e in enrollments:
+            s = e.session
+            
+            # Recordatorio si es dentro de las próximas 24 horas
+            if s.date_time > now and (s.date_time - now).total_seconds() < 86400:
+                hours_left = int((s.date_time - now).total_seconds() // 3600)
+                time_str = f"En {hours_left} horas" if hours_left > 0 else "¡En menos de una hora!"
+                notifications.append({
+                    "id": f"rem_{s.id}",
+                    "type": "reminder",
+                    "title": "Tutoría Próxima",
+                    "message": f"Tu tutoría de {s.subject} es pronto en {s.room or 'sala por definir'}.",
+                    "time": time_str
+                })
+        
+        if not enrollments:
+            notifications.append({
+                "id": "welcome_1",
+                "type": "recommendation",
+                "title": "¡Bienvenido a PITA!",
+                "message": "Explora los salones o inscríbete en tu primera tutoría.",
+                "time": "Recién"
+            })
+
+        return notifications
+    except Exception as e:
+        print("[auth] ERROR getting notifications:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/rooms", tags=["Salones"])
 def get_public_rooms(db: Session = Depends(get_db)):
@@ -645,7 +739,7 @@ def get_available_rooms(
         req_end = req_start + timedelta(minutes=duration)
         
         # Day name in Spanish (CamelCase to match AdminPanel)
-        days_map = {0: "Lunes", 1: "Martes", 2: "Miercoles", 3: "Jueves", 4: "Viernes", 5: "Sabado", 6: "Domingo"}
+        days_map = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
         day_name = days_map[req_start.weekday()]
         
         req_start_str = req_start.strftime("%H:%M")

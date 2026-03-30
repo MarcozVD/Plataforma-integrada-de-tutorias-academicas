@@ -10,12 +10,12 @@ import { Label } from "@/components/ui/label";
 import RoomCard from "@/components/RoomCard";
 import TutoringCard from "@/components/TutoringCard";
 import RecommendationCard from "@/components/RecommendationCard";
-import { rooms } from "@/data/mockData";
 
 const Index = () => {
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [realTutorings, setRealTutorings] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<any[]>([]);
   const [enrolledIds, setEnrolledIds] = useState<Set<number>>(new Set());
   const userType = localStorage.getItem("userType");
   const [loading, setLoading] = useState(true);
@@ -36,11 +36,18 @@ const Index = () => {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchTutorings(), fetchEnrolled()]);
+      await Promise.all([fetchTutorings(), fetchEnrolled(), fetchRooms()]);
       setLoading(false);
     };
     loadData();
   }, []);
+
+  const fetchRooms = async () => {
+    try {
+      const res = await fetch("/auth/rooms");
+      if (res.ok) setRooms(await res.json());
+    } catch (err) { console.error("Error fetching rooms:", err); }
+  };
 
   const fetchEnrolled = async () => {
     try {
@@ -78,6 +85,7 @@ const Index = () => {
             room: t.room || "Pendiente",
             date: dt.toLocaleDateString(),
             time: dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            rawDate: dt,
             duration: `${t.duration} min`,
             spotsAvailable: t.spots_available,
             spots: t.spots,
@@ -303,20 +311,77 @@ const Index = () => {
         <h2 id="recs-heading" className="text-lg font-semibold flex items-center gap-2 mb-3">
           <Sparkles className="h-5 w-5 text-primary" /> {userType === 'tutor' ? 'Resumen para ti' : 'Recomendaciones para ti'}
         </h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <RecommendationCard
-            title="Tutoría de Álgebra Lineal mañana"
-            reason="Coincide con tu hora libre de 09:00 a 10:00"
-          />
-          <RecommendationCard
-            title="Aula 201 disponible ahora"
-            reason="Es accesible y la usas frecuentemente"
-          />
-          <RecommendationCard
-            title="María García dicta Cálculo I"
-            reason="Es la materia que más consultas"
-          />
-        </div>
+        {userType === 'tutor' ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <RecommendationCard 
+              title={`${realTutorings.length} Tutorías Programadas`}
+              reason="Total de sesiones creadas en la plataforma"
+            />
+            {(() => {
+              const now = new Date();
+              const upcoming = realTutorings.filter(t => t.rawDate > now).sort((a,b) => a.rawDate.getTime() - b.rawDate.getTime())[0];
+              return upcoming ? (
+                <RecommendationCard 
+                  title={`Próxima: ${upcoming.subject}`}
+                  reason={`${upcoming.date} a las ${upcoming.time} en ${upcoming.room}`}
+                />
+              ) : (
+                <RecommendationCard 
+                  title="Sin próximas sesiones"
+                  reason="No tienes tutorías programadas próximamente"
+                />
+              );
+            })()}
+            {(() => {
+              const totalEnrolled = realTutorings.reduce((acc, t) => acc + (t.spots - t.spotsAvailable), 0);
+              return (
+                <RecommendationCard 
+                  title={`${totalEnrolled} Estudiantes`}
+                  reason="Inscritos en tus diferentes sesiones"
+                />
+              )
+            })()}
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {(() => {
+              const now = new Date();
+              const available = realTutorings.filter(t => t.rawDate > now && !enrolledIds.has(t.id));
+              const upcomingSession = available.sort((a,b) => a.rawDate.getTime() - b.rawDate.getTime())[0];
+              const availableRoom = rooms.find(r => r.available);
+              const anyOtherSession = available.find(t => t.id !== upcomingSession?.id);
+
+              return (
+                <>
+                  {upcomingSession ? (
+                    <RecommendationCard
+                      title={`Tutoría de ${upcomingSession.subject} disponible`}
+                      reason={`Con ${upcomingSession.tutor} el ${upcomingSession.date} a las ${upcomingSession.time}`}
+                    />
+                  ) : (
+                    <RecommendationCard title="Explora tutorías" reason="Busca sesiones disponibles para afianzar tus conocimientos" />
+                  )}
+                  {availableRoom ? (
+                    <RecommendationCard
+                      title={`${availableRoom.name} disponible ahora`}
+                      reason={`Se encuentra en ${availableRoom.building} con capacidad para ${availableRoom.capacity} personas.`}
+                    />
+                  ) : (
+                    <RecommendationCard title="Busca espacios libres" reason="Revisa la disponibilidad de salones de estudio en tu universidad" />
+                  )}
+                  {anyOtherSession ? (
+                    <RecommendationCard
+                      title={`${anyOtherSession.tutor} dicta ${anyOtherSession.subject}`}
+                      reason={`Aprovecha sus cupos disponibles para prepararte mejor.`}
+                    />
+                  ) : (
+                    <RecommendationCard title="Conoce a todos los tutores" reason="Cientos de tutores dispuestos a ayudarte en la plataforma" />
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        )}
       </section>
 
       {/* Main content tabs */}
