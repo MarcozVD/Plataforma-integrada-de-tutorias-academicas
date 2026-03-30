@@ -34,6 +34,8 @@ const AppLayout = () => {
     setIsStudent(userType === "student");
   }, [location.pathname]);
 
+
+
   return (
     <>
       {!isAuthPage && <Header />}
