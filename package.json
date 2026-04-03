@@ -30,7 +30,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "public/logo-unab.svg"
+      "icon": "public/logo-unab.ico"
     },
     "nsis": {
       "oneClick": false,
