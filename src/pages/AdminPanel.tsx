@@ -180,17 +180,6 @@ const AdminPanel = () => {
         const hashMap: Record<string, string> = { users: "usuarios", sessions: "tutorias", rooms: "salones" };
         window.history.pushState(null, "", `#${hashMap[val]}`);
       }} className="space-y-5">
-        <TabsList className="bg-muted/50 p-1 gap-1">
-          <TabsTrigger value="users"    className="gap-2 data-[state=active]:bg-[#00AEEF] data-[state=active]:text-white">
-            <Users size={14} /> Usuarios <Badge variant="secondary" className="text-[10px] ml-1">{users.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="sessions" className="gap-2 data-[state=active]:bg-[#8DC63F] data-[state=active]:text-white">
-            <BookOpen size={14} /> Tutorías <Badge variant="secondary" className="text-[10px] ml-1">{sessions.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="rooms"    className="gap-2 data-[state=active]:bg-[#6B2D8B] data-[state=active]:text-white">
-            <Building2 size={14} /> Salones <Badge variant="secondary" className="text-[10px] ml-1">{rooms.length}</Badge>
-          </TabsTrigger>
-        </TabsList>
 
         {/* Usuarios */}
         <TabsContent value="users">

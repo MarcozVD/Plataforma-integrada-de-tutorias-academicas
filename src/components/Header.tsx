@@ -65,7 +65,6 @@ const Header = () => {
 
   const adminNav = [
     { path: "/admin",          label: "Panel Admin", icon: <Shield size={15} />         },
-    { path: "/admin#usuarios", label: "Usuarios",    icon: <LayoutDashboard size={15} /> },
     { path: "/admin#tutorias", label: "Tutorías",    icon: <BookOpen size={15} />        },
     { path: "/admin#salones",  label: "Salones",     icon: <DoorOpen size={15} />        },
   ];
@@ -83,8 +82,7 @@ const Header = () => {
 
   return (
     <header className="sticky top-0 z-50 w-full shadow-md">
-      {/* Banda UNAB */}
-      <div className="h-1 w-full" style={{ background: "linear-gradient(90deg, #00AEEF, #0090C5, #6B2D8B)" }} />
+      {/* Barra principal ajustada para confluir con TitleBar */}
 
       {/* Barra principal */}
       <div className="bg-[#0090C5] text-white">

@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -19,9 +19,10 @@ let win: BrowserWindow | null
 
 function createWindow() {
   win = new BrowserWindow({
-    icon: path.join(process.env.VITE_PUBLIC!, 'vite.svg'),
+    icon: path.join(process.env.VITE_PUBLIC!, 'logo-unab.svg'),
     width: 1200,
     height: 800,
+    frame: false, // Quitar el marco superior del SO
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       // You can add other preferences for security as needed
@@ -52,6 +53,27 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow()
+  }
+})
+
+ipcMain.on('window-controls', (event, action) => {
+  const window = BrowserWindow.fromWebContents(event.sender)
+  if (!window) return
+  
+  switch (action) {
+    case 'minimize':
+      window.minimize()
+      break
+    case 'maximize':
+      if (window.isMaximized()) {
+        window.restore()
+      } else {
+        window.maximize()
+      }
+      break
+    case 'close':
+      window.close()
+      break
   }
 })
 

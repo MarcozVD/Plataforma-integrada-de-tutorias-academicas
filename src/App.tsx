@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
 import Header from "@/components/Header";
 import Index from "./pages/Index";
 import Rooms from "./pages/Rooms";
@@ -22,6 +22,8 @@ import AdminPanel from "./pages/AdminPanel";
 import { ChatWidget } from "./components/chat/ChatWidget";
 import { useEffect, useState } from "react";
 
+import { TitleBar } from "./components/TitleBar";
+
 const AppLayout = () => {
   const location = useLocation();
   const isAuthPage = location.pathname === "/" || location.pathname === "/register";
@@ -37,26 +39,29 @@ const AppLayout = () => {
 
 
   return (
-    <>
-      {!isAuthPage && <Header />}
-      <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/index" element={<Index />} />
-        <Route path="/rooms" element={<Rooms />} />
-        <Route path="/schedule" element={<Schedule />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/notifications" element={<Notifications />} />
-        <Route path="/profile" element={<StudentProfile />} />
-        <Route path="/tutor/profile" element={<TutorProfile />} />
-        <Route path="/tutor" element={<TutorPanel />} />
-        <Route path="/admin" element={<AdminPanel />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-      
-      {/* Muestra el Chat automatizado solo si es estudiante y no está en la pantalla de login/registro */}
-      {!isAuthPage && isStudent && <ChatWidget />}
-    </>
+    <div className="flex flex-col min-h-screen w-full">
+      <TitleBar />
+      <div className="flex-1 overflow-auto bg-background">
+        {!isAuthPage && <Header />}
+        <Routes>
+          <Route path="/" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/index" element={<Index />} />
+          <Route path="/rooms" element={<Rooms />} />
+          <Route path="/schedule" element={<Schedule />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/profile" element={<StudentProfile />} />
+          <Route path="/tutor/profile" element={<TutorProfile />} />
+          <Route path="/tutor" element={<TutorPanel />} />
+          <Route path="/admin" element={<AdminPanel />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+        
+        {/* Muestra el Chat automatizado solo si es estudiante y no está en la pantalla de login/registro */}
+        {!isAuthPage && isStudent && <ChatWidget />}
+      </div>
+    </div>
   );
 };
 
@@ -65,9 +70,9 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <HashRouter>
         <AppLayout />
-      </BrowserRouter>
+      </HashRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
