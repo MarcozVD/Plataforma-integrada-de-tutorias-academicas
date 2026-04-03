@@ -1,5 +1,4 @@
 import { Lightbulb } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 interface RecommendationCardProps {
@@ -11,22 +10,20 @@ interface RecommendationCardProps {
 }
 
 const RecommendationCard = ({ icon, title, reason, actionLabel = "Ver más", onAction }: RecommendationCardProps) => (
-  <Card className="border-primary/20 bg-primary/5">
-    <CardContent className="p-4 flex items-start gap-3">
-      <div className="bg-primary/10 rounded-full p-2 shrink-0 mt-0.5">
-        {icon || <Lightbulb className="h-4 w-4 text-primary" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm text-foreground">{title}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{reason}</p>
-        {onAction && (
-          <Button variant="link" size="sm" className="px-0 h-auto mt-1 text-xs" onClick={onAction}>
-            {actionLabel}
-          </Button>
-        )}
-      </div>
-    </CardContent>
-  </Card>
+  <div className="flex items-start gap-3 rounded-xl border border-[#00AEEF]/20 bg-[#00AEEF]/5 px-4 py-3 hover:border-[#00AEEF]/40 hover:bg-[#00AEEF]/8 transition-all">
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#00AEEF]/15 mt-0.5">
+      {icon || <Lightbulb className="h-4 w-4 text-[#0090C5]" />}
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="font-semibold text-sm text-foreground leading-tight">{title}</p>
+      <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{reason}</p>
+      {onAction && (
+        <Button variant="link" size="sm" className="px-0 h-auto mt-1 text-xs text-[#00AEEF] hover:text-[#0090C5]" onClick={onAction}>
+          {actionLabel}
+        </Button>
+      )}
+    </div>
+  </div>
 );
 
 export default RecommendationCard;

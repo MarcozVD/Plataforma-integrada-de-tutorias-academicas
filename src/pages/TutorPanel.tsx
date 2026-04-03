@@ -1,512 +1,437 @@
 import { useState, useEffect } from "react";
-import { GraduationCap, BookOpen, Clock, Plus, Save, Loader2, Check, X, User, MapPin, Users, Calendar as CalendarIcon, ChevronLeft, ChevronRight, LayoutDashboard } from "lucide-react";
+import {
+  GraduationCap, Clock, Plus, Loader2, Users, Calendar as CalendarIcon,
+  ChevronLeft, ChevronRight, LayoutDashboard, Wifi, Building2,
+  AlertTriangle, CheckCircle2, X,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
+
+const BLOCKS    = ["A","B","C","D","E","F","G","H","I","J","K","L"];
+const MONTHS    = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const WEEK_DAYS = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 
 const TutorPanel = () => {
-    const [sessions, setSessions] = useState<any[]>([]);
-    const [tutoringSubjects, setTutoringSubjects] = useState<string[]>([]);
-    const [allRooms, setAllRooms] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
-    const [creatingSession, setCreatingSession] = useState(false);
-    const [selectedSessionStudents, setSelectedSessionStudents] = useState<any[] | null>(null);
-    const [fetchingStudents, setFetchingStudents] = useState(false);
-    const [availableRooms, setAvailableRooms] = useState<any[]>([]);
-    const [fetchingAvailable, setFetchingAvailable] = useState(false);
+  const [sessions, setSessions]               = useState<any[]>([]);
+  const [tutoringSubjects, setTutoringSubjects] = useState<string[]>([]);
+  const [availableRooms, setAvailableRooms]   = useState<any[]>([]);
+  const [loading, setLoading]                 = useState(true);
+  const [creatingSession, setCreatingSession] = useState(false);
+  const [fetchingRooms, setFetchingRooms]     = useState(false);
+  const [error, setError]                     = useState("");
+  const [success, setSuccess]                 = useState(false);
 
-    // Selection state
-    const BLOCKS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
-    const [selectedBlock, setSelectedBlock] = useState<string>("");
-    const [isVirtual, setIsVirtual] = useState(false);
+  // Lógica original del compañero: modal de estudiantes
+  const [selectedSessionStudents, setSelectedSessionStudents] = useState<any[] | null>(null);
+  const [fetchingStudents, setFetchingStudents]               = useState(false);
 
-    const [newSession, setNewSession] = useState({
-        subject: "",
-        date: "",
-        time: "",
-        duration: 60,
-        spots: 5,
-        room: "",
-        accessibility_type: ""
-    });
+  const [isVirtual, setIsVirtual]         = useState(false);
+  const [selectedBlock, setSelectedBlock] = useState("");
+  const [currentMonth, setCurrentMonth]  = useState(new Date());
 
-    // Calendar state
-    const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [newSession, setNewSession] = useState({
+    subject: "", date: "", time: "", duration: 60, spots: 5, room: "", accessibility_type: "",
+  });
 
-    const fetchRooms = async () => {
-        try {
-            const res = await fetch("/auth/rooms");
-            if (res.ok) setAllRooms(await res.json());
-        } catch (err) { }
+  // Nombre del tutor desde localStorage
+  const fullName  = localStorage.getItem("fullName") || "";
+  const firstName = fullName.split(" ")[0] || "Tutor";
+
+  useEffect(() => { fetchUserData(); fetchSessions(); }, []);
+
+  useEffect(() => {
+    if (!newSession.date || !newSession.time) return;
+    const load = async () => {
+      setFetchingRooms(true);
+      try {
+        const res = await fetch(`/auth/rooms/available?date=${newSession.date}&time=${newSession.time}&duration=${newSession.duration}`);
+        if (res.ok) setAvailableRooms(await res.json());
+      } catch {} finally { setFetchingRooms(false); }
     };
+    load();
+  }, [newSession.date, newSession.time, newSession.duration]);
 
-    useEffect(() => {
-        fetchUserData();
-        fetchSessions();
-        // fetchRooms(); // We now fetch dynamically based on date/time
-    }, []);
+  const fetchUserData = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res   = await fetch("/auth/me", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { const d = await res.json(); setTutoringSubjects(d.interest_subjects || []); }
+    } catch {}
+  };
 
-    const fetchAvailableRooms = async () => {
-        if (!newSession.date || !newSession.time) return;
-        setFetchingAvailable(true);
-        try {
-            const res = await fetch(`/auth/rooms/available?date=${newSession.date}&time=${newSession.time}&duration=${newSession.duration}`);
-            if (res.ok) {
-                const data = await res.json();
-                setAvailableRooms(data);
-            }
-        } catch (err) {
-            console.error("Error fetching available rooms:", err);
-        } finally {
-            setFetchingAvailable(false);
-        }
-    };
+  const fetchSessions = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res   = await fetch("/auth/tutor/sessions", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setSessions(await res.json());
+    } catch { setError("No se pudieron cargar las sesiones"); }
+    finally { setLoading(false); }
+  };
 
-    useEffect(() => {
-        fetchAvailableRooms();
-    }, [newSession.date, newSession.time, newSession.duration]);
+  const handleCreateSession = async () => {
+    setError("");
+    if (!newSession.subject || !newSession.date || !newSession.time) {
+      setError("Completa los campos obligatorios: materia, fecha y hora."); return;
+    }
+    setCreatingSession(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res   = await fetch("/auth/tutor/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          subject: newSession.subject, date_time: `${newSession.date}T${newSession.time}:00`,
+          duration: newSession.duration, spots: newSession.spots,
+          room: newSession.room, accessibility_type: newSession.accessibility_type,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      await fetchSessions();
+      setNewSession({ subject: "", date: "", time: "", duration: 60, spots: 5, room: "", accessibility_type: "" });
+      setIsVirtual(false); setSelectedBlock("");
+      setSuccess(true); setTimeout(() => setSuccess(false), 4000);
+    } catch { setError("Error al crear la sesión. Inténtalo de nuevo."); }
+    finally { setCreatingSession(false); }
+  };
 
-    const fetchUserData = async () => {
-        try {
-            const token = localStorage.getItem("token");
-            const response = await fetch("/auth/me", {
-                headers: { "Authorization": `Bearer ${token}` },
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setTutoringSubjects(data.interest_subjects || []);
-            }
-        } catch (err) {
-            console.error("Error fetching user data:", err);
-        }
-    };
+  // Lógica original del compañero: ver estudiantes inscritos
+  const handleViewStudents = async (sessionId: number) => {
+    setFetchingStudents(true);
+    setSelectedSessionStudents([]);
+    try {
+      const token = localStorage.getItem("token");
+      const res   = await fetch(`/auth/tutor/sessions/${sessionId}/students`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setSelectedSessionStudents(await res.json());
+    } catch {} finally { setFetchingStudents(false); }
+  };
 
-    const fetchSessions = async () => {
-        setLoading(true);
-        try {
-            const token = localStorage.getItem("token");
-            const response = await fetch("/auth/tutor/sessions", {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setSessions(data);
-            }
-        } catch (err) {
-            console.error("Error fetching sessions:", err);
-            setError("No se pudieron cargar las sesiones");
-        } finally {
-            setLoading(false);
-        }
-    };
+  // Calendario
+  const year = currentMonth.getFullYear(), month = currentMonth.getMonth();
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  const startDay  = new Date(year, month, 1).getDay();
+  const today     = new Date();
+  const isToday   = (d: number) => d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
 
-    const handleCreateSession = async () => {
-        if (!newSession.subject || !newSession.date || !newSession.time) {
-            setError("Completa los campos obligatorios");
-            return;
-        }
+  const calendarCells = () => {
+    const cells = [];
+    for (let i = 0; i < startDay; i++)
+      cells.push(<div key={`e-${i}`} className="h-24 border-b border-r border-border/30 bg-muted/10" />);
+    for (let day = 1; day <= totalDays; day++) {
+      const dateStr    = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+      const daySessions = sessions.filter(s => s.date_time.startsWith(dateStr));
+      cells.push(
+        <div key={day} className={cn("h-24 border-b border-r border-border/30 p-1.5 overflow-y-auto transition-colors",
+          isToday(day) ? "bg-[#00AEEF]/5" : "hover:bg-muted/20")}>
+          <span className={cn("flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold",
+            isToday(day) ? "bg-[#00AEEF] text-white" : "text-muted-foreground")}>
+            {day}
+          </span>
+          <div className="flex flex-col gap-0.5 mt-1">
+            {daySessions.map(s => (
+              <div key={s.id} title={`${s.date_time.split("T")[1]?.substring(0,5)} — ${s.subject}`}
+                className="text-[9px] px-1 py-0.5 bg-[#00AEEF]/15 text-[#0090C5] rounded border border-[#00AEEF]/20 truncate font-medium">
+                {s.date_time.split("T")[1]?.substring(0,5)} {s.subject}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return cells;
+  };
 
-        setCreatingSession(true);
-        try {
-            const token = localStorage.getItem("token");
-            const dateTime = `${newSession.date}T${newSession.time}:00`;
+  const filteredRooms    = availableRooms.filter(r => !selectedBlock || r.building === selectedBlock);
+  const totalStudents    = sessions.reduce((acc, s) => acc + (s.spots - (s.spots_available ?? s.spots)), 0);
+  const upcomingSessions = sessions.filter(s => new Date(s.date_time) > new Date()).length;
 
-            const response = await fetch("/auth/tutor/sessions", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    subject: newSession.subject,
-                    date_time: dateTime,
-                    duration: newSession.duration,
-                    spots: newSession.spots,
-                    room: newSession.room,
-                    accessibility_type: newSession.accessibility_type
-                })
-            });
+  return (
+    <main className="container mx-auto px-4 py-8 max-w-7xl animate-fade-in">
 
-            if (!response.ok) throw new Error("Error al crear sesión");
+      <section className="mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2">
+          <LayoutDashboard size={24} className="text-[#00AEEF]" /> Panel del tutor
+        </h1>
+        <p className="text-muted-foreground mt-1">Bienvenido, {firstName} — gestiona tus sesiones de tutoría</p>
+        <div className="mt-4 h-1 w-24 rounded-full unab-gradient" />
+      </section>
 
-            await fetchSessions();
-            setNewSession({
-                subject: "",
-                date: "",
-                time: "",
-                duration: 60,
-                spots: 5,
-                room: "",
-                accessibility_type: ""
-            });
-        } catch (err) {
-            setError("Error al crear la sesión");
-        } finally {
-            setCreatingSession(false);
-        }
-    };
-
-    const handleViewStudents = async (sessionId: number) => {
-        setFetchingStudents(true);
-        setSelectedSessionStudents([]);
-        try {
-            const token = localStorage.getItem("token");
-            const res = await fetch(`/auth/tutor/sessions/${sessionId}/students`, {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setSelectedSessionStudents(data);
-            }
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setFetchingStudents(false);
-        }
-    };
-
-    // Calendar Logic
-    const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
-    const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
-
-    const renderCalendar = () => {
-        const year = currentMonth.getFullYear();
-        const month = currentMonth.getMonth();
-        const totalDays = daysInMonth(year, month);
-        const startDay = firstDayOfMonth(year, month);
-
-        const days = [];
-        // Padding for first week
-        for (let i = 0; i < startDay; i++) {
-            days.push(<div key={`empty-${i}`} className="h-24 bg-muted/10 border-b border-r"></div>);
-        }
-
-        // Actual days
-        for (let day = 1; day <= totalDays; day++) {
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const daySessions = sessions.filter(s => s.date_time.startsWith(dateStr));
-
-            days.push(
-                <div key={day} className="h-24 border-b border-r p-1 overflow-y-auto hover:bg-muted/5 transition-colors">
-                    <span className="text-xs font-semibold text-muted-foreground">{day}</span>
-                    <div className="flex flex-col gap-1 mt-1">
-                        {daySessions.map(s => (
-                            <div
-                                key={s.id}
-                                className="text-[10px] p-1 bg-indigo-100 text-indigo-700 rounded border border-indigo-200 truncate"
-                                title={`${s.time}: ${s.subject}`}
-                            >
-                                {s.date_time.split('T')[1].substring(0, 5)} {s.subject}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-        }
-
-        return days;
-    };
-
-    const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
-    const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
-
-    const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-
-    return (
-        <main className="container mx-auto px-4 py-8 max-w-[1600px]">
-            <div className="flex items-center justify-between mb-8 text-center sm:text-left flex-col sm:flex-row gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold flex items-center gap-3 text-indigo-900">
-                        <LayoutDashboard className="h-8 w-8 text-indigo-600 bg-indigo-50 p-1.5 rounded-lg shadow-sm" /> Panel de Control del Tutor
-                    </h1>
-                    <p className="text-muted-foreground mt-1 text-lg">Gestiona tus sesiones y horario de tutorías</p>
-                </div>
+      {/* Stats */}
+      <section className="mb-6 grid grid-cols-3 gap-3">
+        {[
+          { label: "Sesiones totales", value: sessions.length, icon: <GraduationCap size={18} />, bg: "bg-[#00AEEF]/10", color: "text-[#0090C5]" },
+          { label: "Próximas",         value: upcomingSessions, icon: <Clock size={18} />,         bg: "bg-[#8DC63F]/10", color: "text-[#578426]" },
+          { label: "Estudiantes",      value: totalStudents,    icon: <Users size={18} />,         bg: "bg-[#6B2D8B]/10", color: "text-[#6B2D8B]" },
+        ].map(s => (
+          <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 shadow-sm">
+            <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", s.bg)}>
+              <span className={s.color}>{s.icon}</span>
             </div>
+            <div>
+              <p className="text-xl font-bold leading-none">{s.value}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
+            </div>
+          </div>
+        ))}
+      </section>
 
-            <div className="grid lg:grid-cols-3 gap-8">
-                {/* Left Column: Form & List */}
-                <div className="lg:col-span-1 space-y-8">
-                    <Card className="shadow-xl bg-white border-2 border-indigo-50/50">
-                        <CardHeader className="bg-gradient-to-r from-indigo-50/20 to-transparent">
-                            <CardTitle className="text-xl flex items-center gap-3 text-indigo-900">
-                                <Plus className="h-6 w-6 text-indigo-600" /> Programar Tutoría
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-6 space-y-4">
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Materia</Label>
-                                    <select
-                                        value={newSession.subject}
-                                        onChange={(e) => setNewSession({ ...newSession, subject: e.target.value })}
-                                        className="w-full h-11 px-4 bg-white border-2 border-indigo-50 rounded-xl text-sm"
-                                    >
-                                        <option value="">Selecciona materia...</option>
-                                        {tutoringSubjects.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </div>
+      <div className="grid lg:grid-cols-3 gap-6">
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Fecha</Label>
-                                        <Input
-                                            type="date"
-                                            value={newSession.date}
-                                            onChange={(e) => setNewSession({ ...newSession, date: e.target.value })}
-                                            className="h-11 border-indigo-100"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Hora</Label>
-                                        <Input
-                                            type="time"
-                                            value={newSession.time}
-                                            onChange={(e) => setNewSession({ ...newSession, time: e.target.value })}
-                                            className="h-11 border-indigo-100"
-                                        />
-                                    </div>
-                                </div>
+        {/* Columna izquierda */}
+        <div className="lg:col-span-1 space-y-6">
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Cupos</Label>
-                                        <Input
-                                            type="number"
-                                            value={newSession.spots}
-                                            onChange={(e) => setNewSession({ ...newSession, spots: parseInt(e.target.value) })}
-                                            className="h-11 border-indigo-100"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Duración (min)</Label>
-                                        <Input
-                                            type="number"
-                                            value={newSession.duration}
-                                            onChange={(e) => setNewSession({ ...newSession, duration: parseInt(e.target.value) })}
-                                            className="h-11 border-indigo-100"
-                                        />
-                                    </div>
-                                </div>
+          {/* Formulario */}
+          <Card className="border border-border/60 shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/40">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Plus size={16} className="text-[#00AEEF]" /> Programar tutoría
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Materia <span className="text-red-500">*</span></Label>
+                <select value={newSession.subject} onChange={e => setNewSession({ ...newSession, subject: e.target.value })}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF]/40">
+                  <option value="">Selecciona una materia...</option>
+                  {tutoringSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
 
-                                <div className="space-y-3">
-                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ubicación de la Tutoría</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Fecha <span className="text-red-500">*</span></Label>
+                  <Input type="date" value={newSession.date} onChange={e => setNewSession({ ...newSession, date: e.target.value })} className="text-sm" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Hora <span className="text-red-500">*</span></Label>
+                  <Input type="time" value={newSession.time} onChange={e => setNewSession({ ...newSession, time: e.target.value })} className="text-sm" />
+                </div>
+              </div>
 
-                                    <div className="flex gap-4 mb-2">
-                                        <Button
-                                            variant={isVirtual ? "outline" : "default"}
-                                            size="sm"
-                                            className="flex-1 rounded-xl"
-                                            onClick={() => setIsVirtual(false)}
-                                        >
-                                            En Campus
-                                        </Button>
-                                        <Button
-                                            variant={isVirtual ? "default" : "outline"}
-                                            size="sm"
-                                            className="flex-1 rounded-xl"
-                                            onClick={() => {
-                                                setIsVirtual(true);
-                                                setSelectedBlock("");
-                                                setNewSession({ ...newSession, room: "Virtual / Link" });
-                                            }}
-                                        >
-                                            Virtual
-                                        </Button>
-                                    </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Cupos</Label>
+                  <Input type="number" min={1} value={newSession.spots} onChange={e => setNewSession({ ...newSession, spots: parseInt(e.target.value) })} className="text-sm" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Duración (min)</Label>
+                  <Input type="number" min={15} step={15} value={newSession.duration} onChange={e => setNewSession({ ...newSession, duration: parseInt(e.target.value) })} className="text-sm" />
+                </div>
+              </div>
 
-                                    {!isVirtual ? (
-                                        <div className="grid grid-cols-1 gap-3 p-3 bg-indigo-50/30 rounded-xl border border-indigo-100">
-                                            <div className="space-y-2">
-                                                <Label className="text-[10px] uppercase text-indigo-700">Filtrar por Bloque</Label>
-                                                <select
-                                                    className="w-full text-xs p-2 border rounded-md bg-white"
-                                                    value={selectedBlock}
-                                                    onChange={e => setSelectedBlock(e.target.value)}
-                                                >
-                                                    <option value="">Todos los bloques</option>
-                                                    {BLOCKS.map(b => <option key={b} value={`Bloque ${b}`}>Bloque {b}</option>)}
-                                                </select>
-                                            </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Modalidad</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => { setIsVirtual(false); setNewSession({ ...newSession, room: "" }); }}
+                    className={cn("flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium border transition-colors",
+                      !isVirtual ? "bg-[#00AEEF] text-white border-[#00AEEF]" : "bg-muted text-muted-foreground border-border")}>
+                    <Building2 size={13} /> En campus
+                  </button>
+                  <button onClick={() => { setIsVirtual(true); setSelectedBlock(""); setNewSession({ ...newSession, room: "" }); }}
+                    className={cn("flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium border transition-colors",
+                      isVirtual ? "bg-[#6B2D8B] text-white border-[#6B2D8B]" : "bg-muted text-muted-foreground border-border")}>
+                    <Wifi size={13} /> Virtual
+                  </button>
+                </div>
+              </div>
 
-                                            <div className="space-y-1">
-                                                <Label className="text-[10px] uppercase text-indigo-700">
-                                                    Salón disponible ({availableRooms.filter(r => !selectedBlock || r.building === selectedBlock).length})
-                                                </Label>
-                                                <select
-                                                    className="w-full text-xs p-2 border rounded-md bg-white shadow-sm"
-                                                    disabled={!newSession.date || !newSession.time || fetchingAvailable}
-                                                    value={newSession.room}
-                                                    onChange={e => setNewSession({ ...newSession, room: e.target.value })}
-                                                >
-                                                    <option value="">{fetchingAvailable ? "Cargando..." : "Seleccionar salón..."}</option>
-                                                    {availableRooms
-                                                        .filter(r => !selectedBlock || r.building === selectedBlock)
-                                                        .map(r => (
-                                                            <option key={r.id} value={r.name}>{r.name} (Cap: {r.capacity})</option>
-                                                        ))
-                                                    }
-                                                </select>
-                                                {availableRooms.length === 0 && newSession.date && newSession.time && !fetchingAvailable && (
-                                                    <div className="bg-red-50 p-2 rounded border border-red-100 mt-2">
-                                                        <p className="text-[9px] text-red-600 font-medium">
-                                                            No hay salones disponibles en este horario.
-                                                            Verifica que el bloque seleccionado tenga salones habilitados por el admin.
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <Input
-                                            placeholder="Ingresa el link de la sesión (Zoom, Meet, etc)"
-                                            value={newSession.room === "Virtual / Link" ? "" : newSession.room}
-                                            onChange={(e) => setNewSession({ ...newSession, room: e.target.value })}
-                                            className="h-11 border-indigo-100"
-                                        />
-                                    )}
-                                </div>
+              {!isVirtual ? (
+                <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide">Filtrar por bloque</Label>
+                    <select className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+                      value={selectedBlock} onChange={e => setSelectedBlock(e.target.value)}>
+                      <option value="">Todos los bloques</option>
+                      {BLOCKS.map(b => <option key={b} value={`Bloque ${b}`}>Bloque {b}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide flex items-center gap-1">
+                      Salón disponible {fetchingRooms && <Loader2 size={10} className="animate-spin" />}
+                      <span className="ml-auto font-normal">({filteredRooms.length})</span>
+                    </Label>
+                    <select className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+                      disabled={!newSession.date || !newSession.time || fetchingRooms}
+                      value={newSession.room} onChange={e => setNewSession({ ...newSession, room: e.target.value })}>
+                      <option value="">{fetchingRooms ? "Buscando..." : !newSession.date || !newSession.time ? "Primero selecciona fecha y hora" : "Seleccionar salón..."}</option>
+                      {filteredRooms.map(r => <option key={r.id} value={r.name}>{r.name} — Cap. {r.capacity}</option>)}
+                    </select>
+                    {filteredRooms.length === 0 && newSession.date && newSession.time && !fetchingRooms && (
+                      <p className="text-[10px] text-orange-600 bg-orange-50 border border-orange-100 px-2 py-1.5 rounded-md">No hay salones disponibles en este horario.</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Link de la sesión</Label>
+                  <Input placeholder="https://meet.google.com/..." value={newSession.room}
+                    onChange={e => setNewSession({ ...newSession, room: e.target.value })} className="text-sm" />
+                </div>
+              )}
 
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Discapacidad Atendida</Label>
-                                    <select
-                                        value={newSession.accessibility_type}
-                                        onChange={(e) => setNewSession({ ...newSession, accessibility_type: e.target.value })}
-                                        className="w-full h-11 px-4 bg-white border-2 border-indigo-50 rounded-xl text-sm"
-                                    >
-                                        <option value="">Ninguna / General</option>
-                                        <option value="Movilidad reducida">Movilidad reducida</option>
-                                        <option value="Auditiva">Auditiva</option>
-                                        <option value="Visual">Visual</option>
-                                        <option value="Cognitiva">Cognitiva</option>
-                                    </select>
-                                </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Discapacidad atendida</Label>
+                <select value={newSession.accessibility_type} onChange={e => setNewSession({ ...newSession, accessibility_type: e.target.value })}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF]/40">
+                  <option value="">Ninguna / General</option>
+                  <option value="Movilidad reducida">Movilidad reducida</option>
+                  <option value="Auditiva">Auditiva</option>
+                  <option value="Visual">Visual</option>
+                  <option value="Cognitiva">Cognitiva</option>
+                </select>
+              </div>
 
-                                <Button
-                                    onClick={handleCreateSession}
-                                    disabled={creatingSession}
-                                    className="w-full mt-2 h-12 bg-indigo-600 hover:bg-indigo-700 shadow-lg text-lg gap-2"
-                                >
-                                    {creatingSession ? <Loader2 className="animate-spin h-5 w-5" /> : <Plus className="h-5 w-5" />}
-                                    Crear Sesión
-                                </Button>
-                                {error && <p className="text-xs text-red-500 mt-2 font-medium bg-red-50 p-2 rounded border border-red-100">{error}</p>}
-                            </div>
-                        </CardContent>
-                    </Card>
+              {error && (
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">
+                  <AlertTriangle size={13} className="shrink-0" /> {error}
+                </div>
+              )}
+              {success && (
+                <div className="flex items-center gap-2 text-sm text-[#578426] bg-[#8DC63F]/10 border border-[#8DC63F]/30 px-3 py-2 rounded-lg">
+                  <CheckCircle2 size={13} className="shrink-0" /> ¡Sesión creada exitosamente!
+                </div>
+              )}
 
-                    <div className="space-y-4">
-                        <h2 className="text-xl font-bold flex items-center gap-2 text-indigo-900">
-                            <Clock className="h-6 w-6 text-indigo-600" /> Próximas Tutorías
-                        </h2>
-                        <div className="space-y-3">
-                            {sessions.slice(0, 5).map(s => (
-                                <Card key={s.id} className="hover:border-indigo-400/50 transition-all hover:shadow-md border-2 border-indigo-50 shadow-sm overflow-hidden">
-                                    <CardContent className="p-4 flex items-center justify-between">
-                                        <div className="space-y-1">
-                                            <h3 className="font-bold text-indigo-900 text-sm">{s.subject}</h3>
-                                            <p className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
-                                                <CalendarIcon className="h-3.5 w-3.5 text-indigo-500" /> {s.date_time.split('T')[0]} @ {s.date_time.split('T')[1].substring(0, 5)}
-                                            </p>
-                                            {s.accessibility_type && (
-                                                <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-100">
-                                                    Inclusivo: {s.accessibility_type}
-                                                </Badge>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col items-end gap-2">
-                                            <Badge variant="secondary" className="px-3 py-1 bg-indigo-50 text-indigo-700 font-bold border-indigo-100">
-                                                {s.spots_available}/{s.spots} cupos
-                                            </Badge>
-                                            <Button variant="outline" size="sm" onClick={() => handleViewStudents(s.id)} className="h-8 text-xs border-indigo-200 text-indigo-600 hover:bg-indigo-50">
-                                                <Users className="h-3 w-3 mr-1" /> Ver Inscritos
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                            {sessions.length === 0 && <p className="text-sm text-muted-foreground italic bg-muted/20 p-4 rounded-xl text-center border-2 border-dashed">No hay tutorías programadas</p>}
+              <Button onClick={handleCreateSession} disabled={creatingSession}
+                className="w-full gap-2 bg-[#00AEEF] hover:bg-[#0090C5] text-white font-semibold">
+                {creatingSession ? <><Loader2 size={15} className="animate-spin" /> Creando...</> : <><Plus size={15} /> Crear sesión</>}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Próximas tutorías con "Ver inscritos" */}
+          <div>
+            <h2 className="text-base font-semibold flex items-center gap-2 mb-3">
+              <Clock size={15} className="text-[#00AEEF]" /> Próximas tutorías
+              <Badge variant="secondary" className="text-xs">{sessions.slice(0,5).length}</Badge>
+            </h2>
+            {loading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <div className="h-5 w-5 rounded-full border-2 border-[#00AEEF] border-t-transparent animate-spin mr-2" /> Cargando...
+              </div>
+            ) : sessions.length === 0 ? (
+              <div className="rounded-xl border-2 border-dashed border-border p-6 text-center text-muted-foreground text-sm">No hay sesiones programadas aún</div>
+            ) : (
+              <div className="space-y-2">
+                {sessions.slice(0,5).map(s => {
+                  const dt        = new Date(s.date_time);
+                  const dateStr   = dt.toLocaleDateString("es-CO", { day: "numeric", month: "short" });
+                  const timeStr   = dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                  const available = s.spots_available ?? s.spots;
+                  const ratio     = available / s.spots;
+                  return (
+                    <div key={s.id} className="rounded-xl border border-border/60 bg-card px-3 py-2.5 hover:border-[#00AEEF]/30 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#00AEEF]/10">
+                          <GraduationCap size={16} className="text-[#0090C5]" />
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{s.subject}</p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <CalendarIcon size={10} /> {dateStr} · {timeStr}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className={cn("shrink-0 text-[10px] font-semibold",
+                          ratio <= 0.2 ? "bg-red-50 text-red-700 border-red-200" :
+                          ratio <= 0.5 ? "bg-orange-50 text-orange-700 border-orange-200" :
+                                         "bg-[#8DC63F]/10 text-[#578426] border-[#8DC63F]/30")}>
+                          {available}/{s.spots}
+                        </Badge>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => handleViewStudents(s.id)}
+                        className="mt-2 w-full h-7 text-xs border-[#00AEEF]/30 text-[#0090C5] hover:bg-[#00AEEF]/8 gap-1">
+                        <Users size={12} /> Ver inscritos
+                      </Button>
                     </div>
-                </div>
-
-                {/* Right Column: Calendar */}
-                <div className="lg:col-span-2">
-                    <Card className="h-full shadow-2xl overflow-hidden border-2 border-indigo-50/50 bg-white">
-                        <CardHeader className="flex flex-row items-center justify-between border-b-2 border-indigo-50 pb-6 pt-8 bg-indigo-50/10">
-                            <div className="flex items-center gap-4">
-                                <CalendarIcon className="h-8 w-8 text-indigo-600 bg-white p-1.5 rounded-lg shadow-sm" />
-                                <CardTitle className="text-2xl font-bold text-indigo-900">
-                                    {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-                                </CardTitle>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Button variant="outline" size="icon" onClick={prevMonth} className="h-10 w-10 border-indigo-100 hover:bg-indigo-50"><ChevronLeft className="h-5 w-5 text-indigo-600" /></Button>
-                                <Button variant="outline" size="sm" onClick={() => setCurrentMonth(new Date())} className="h-10 px-4 border-indigo-100 font-bold text-indigo-600 hover:bg-indigo-50">Hoy</Button>
-                                <Button variant="outline" size="icon" onClick={nextMonth} className="h-10 w-10 border-indigo-100 hover:bg-indigo-50"><ChevronRight className="h-5 w-5 text-indigo-600" /></Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            {/* Calendar Grid */}
-                            <div className="grid grid-cols-7 text-center border-b border-indigo-50 bg-indigo-50/30">
-                                {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map(d => (
-                                    <div key={d} className="py-4 text-xs font-bold text-indigo-700 uppercase tracking-widest">{d}</div>
-                                ))}
-                            </div>
-                            <div className="grid grid-cols-7 min-h-[700px]">
-                                {renderCalendar()}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
-
-            {/* Students Modal */}
-            {selectedSessionStudents !== null && (
-                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setSelectedSessionStudents(null) }}>
-                    <Card className="w-full max-w-lg shadow-2xl animate-in fade-in zoom-in-95">
-                        <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
-                            <CardTitle className="flex items-center gap-2">
-                                <Users className="h-5 w-5 text-indigo-600" />
-                                Estudiantes Inscritos
-                            </CardTitle>
-                            <Button variant="ghost" size="icon" onClick={() => setSelectedSessionStudents(null)} className="h-8 w-8 rounded-full">
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </CardHeader>
-                        <CardContent className="max-h-[60vh] overflow-y-auto p-4 space-y-3">
-                            {fetchingStudents ? (
-                                <p className="text-center text-muted-foreground py-8">Cargando estudiantes...</p>
-                            ) : selectedSessionStudents.length === 0 ? (
-                                <p className="text-center text-muted-foreground py-8 italic bg-muted/20 rounded-xl border border-dashed">
-                                    No hay estudiantes inscritos aún
-                                </p>
-                            ) : (
-                                selectedSessionStudents.map(student => (
-                                    <div key={student.id} className="flex items-center justify-between p-3 rounded-xl border border-indigo-50 bg-indigo-50/20 hover:bg-indigo-50/50 transition-colors">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold">
-                                                {student.full_name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <p className="font-semibold text-sm">{student.full_name}</p>
-                                                <p className="text-xs text-muted-foreground">{student.email}</p>
-                                            </div>
-                                        </div>
-                                        {student.carrera && (
-                                            <Badge variant="secondary" className="text-[10px]">{student.carrera}</Badge>
-                                        )}
-                                    </div>
-                                ))
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
+                  );
+                })}
+              </div>
             )}
-        </main>
-    );
+          </div>
+        </div>
+
+        {/* Calendario */}
+        <div className="lg:col-span-2">
+          <Card className="border border-border/60 shadow-sm h-full">
+            <CardHeader className="pb-3 border-b border-border/40">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CalendarIcon size={16} className="text-[#00AEEF]" /> {MONTHS[month]} {year}
+                </CardTitle>
+                <div className="flex items-center gap-1.5">
+                  <Button variant="outline" size="icon" className="h-8 w-8"
+                    onClick={() => setCurrentMonth(new Date(year, month - 1))}><ChevronLeft size={14} /></Button>
+                  <Button variant="outline" size="sm"
+                    className="h-8 px-3 text-xs font-medium text-[#00AEEF] border-[#00AEEF]/30 hover:bg-[#00AEEF]/5"
+                    onClick={() => setCurrentMonth(new Date())}>Hoy</Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8"
+                    onClick={() => setCurrentMonth(new Date(year, month + 1))}><ChevronRight size={14} /></Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="grid grid-cols-7 border-b border-border/40">
+                {WEEK_DAYS.map(d => (
+                  <div key={d} className="py-2 text-center text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{d}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7">{calendarCells()}</div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Modal estudiantes */}
+      {selectedSessionStudents !== null && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setSelectedSessionStudents(null); }}>
+          <Card className="w-full max-w-lg shadow-2xl">
+            <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Users size={16} className="text-[#00AEEF]" /> Estudiantes inscritos
+              </CardTitle>
+              <Button variant="ghost" size="icon" onClick={() => setSelectedSessionStudents(null)} className="h-8 w-8 rounded-full">
+                <X size={14} />
+              </Button>
+            </CardHeader>
+            <CardContent className="max-h-[60vh] overflow-y-auto p-4 space-y-3">
+              {fetchingStudents ? (
+                <div className="flex items-center justify-center py-10 text-muted-foreground">
+                  <div className="h-5 w-5 rounded-full border-2 border-[#00AEEF] border-t-transparent animate-spin mr-2" /> Cargando...
+                </div>
+              ) : selectedSessionStudents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground rounded-xl border-2 border-dashed border-border">
+                  <Users size={28} className="mb-2 opacity-20" />
+                  <p className="text-sm">No hay estudiantes inscritos aún</p>
+                </div>
+              ) : (
+                selectedSessionStudents.map(student => (
+                  <div key={student.id} className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-card hover:border-[#00AEEF]/20 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00AEEF]/10 text-[#0090C5] font-bold text-sm">
+                        {student.full_name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">{student.full_name}</p>
+                        <p className="text-xs text-muted-foreground">{student.email}</p>
+                      </div>
+                    </div>
+                    {student.carrera && <Badge variant="outline" className="text-[10px] shrink-0">{student.carrera}</Badge>}
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </main>
+  );
 };
 
 export default TutorPanel;

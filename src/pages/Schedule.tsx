@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
-import { Clock, Trash2, CheckCircle, AlertCircle, Search, Filter, X } from "lucide-react";
+import { Clock, Search, Filter, X, CalendarDays, Plus, Trash2, AlertTriangle, CheckCircle2, BookOpen } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TutoringCard from "@/components/TutoringCard";
+import { cn } from "@/lib/utils";
 
 interface ScheduleBlock {
   id: string;
@@ -20,402 +20,252 @@ interface ScheduleBlock {
   session_id?: number;
 }
 
-const allDays = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-const dayIndexMap = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-const hoursRange = Array.from({ length: 15 }, (_, i) => `${6 + i}:00`);
-
+const ALL_DAYS    = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+const DAY_INDEX   = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+const HOURS_RANGE = Array.from({ length: 15 }, (_, i) => `${6 + i}:00`);
+const timeToMin   = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
 
 const Schedule = () => {
-  const [userSchedule, setUserSchedule] = useState<ScheduleBlock[]>([]);
+  const [userSchedule, setUserSchedule]         = useState<ScheduleBlock[]>([]);
   const [enrolledSessions, setEnrolledSessions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [newBlock, setNewBlock] = useState({
-    day: "Lunes",
-    subject: "",
-    startTime: "08:00",
-    endTime: "09:00",
-  });
+  const [realAllSessions, setRealAllSessions]   = useState<any[]>([]);
+  const [loading, setLoading]                   = useState(true);
+  const [overlapResult, setOverlapResult]       = useState<null|number>(null);
+  const [blockError, setBlockError]             = useState("");
 
-  // Filtros de tutorías
+  const [newBlock, setNewBlock] = useState({ day: "Lunes", subject: "", startTime: "08:00", endTime: "09:00" });
   const [searchTutoring, setSearchTutoring] = useState("");
-  const [subjectFilter, setSubjectFilter] = useState<string>("all");
-  const [dateFilter, setDateFilter] = useState<string>("");
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [solapamientos, setSolapamientos] = useState<string[]>([]);
+  const [subjectFilter, setSubjectFilter]   = useState("all");
+  const [dateFilter, setDateFilter]         = useState("");
+  const [filtersOpen, setFiltersOpen]       = useState(false);
 
-  // Cargar horario del localStorage
   useEffect(() => {
     const saved = localStorage.getItem("userHorario");
-    if (saved) {
-      try {
-        setUserSchedule(JSON.parse(saved));
-      } catch {
-        setUserSchedule([]);
-      }
-    }
+    if (saved) { try { setUserSchedule(JSON.parse(saved)); } catch {} }
     fetchEnrolledSessions();
+    fetchAllSessions();
   }, []);
+
+  useEffect(() => { localStorage.setItem("userHorario", JSON.stringify(userSchedule)); }, [userSchedule]);
 
   const fetchEnrolledSessions = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("/auth/student/enrolled-sessions", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setEnrolledSessions(data);
-      }
-    } catch (err) {
-      console.error("Error fetching enrolled sessions:", err);
-    } finally {
-      setLoading(false);
-    }
+      const res   = await fetch("/auth/student/enrolled-sessions", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setEnrolledSessions(await res.json());
+    } catch {} finally { setLoading(false); }
   };
-
-  // Convertir sesiones inscritas a bloques del horario
-  const combinedSchedule = useMemo(() => {
-    const enrollmentBlocks = enrolledSessions.map(s => {
-      const dt = new Date(s.date_time);
-      const day = dayIndexMap[dt.getDay()];
-      const h = dt.getHours().toString().padStart(2, '0');
-      const m = dt.getMinutes().toString().padStart(2, '0');
-      const startTime = `${h}:${m}`;
-
-      const endDt = new Date(dt.getTime() + s.duration * 60000);
-      const eh = endDt.getHours().toString().padStart(2, '0');
-      const em = endDt.getMinutes().toString().padStart(2, '0');
-      const endTime = `${eh}:${em}`;
-      
-      const isPast = dt < new Date();
-
-      return {
-        id: `enroll-${s.id}`,
-        session_id: s.id,
-        day,
-        subject: `[TUT] ${s.subject}`,
-        startTime,
-        endTime,
-        isTutoring: true,
-        isPast
-      };
-    });
-    return [...userSchedule, ...enrollmentBlocks];
-  }, [userSchedule, enrolledSessions]);
-
-  // Guardar horario en localStorage
-  useEffect(() => {
-    localStorage.setItem("userHorario", JSON.stringify(userSchedule));
-  }, [userSchedule]);
-
-  const [realAllSessions, setRealAllSessions] = useState<any[]>([]);
-
-  useEffect(() => {
-    fetchAllSessions();
-  }, []);
 
   const fetchAllSessions = async () => {
     try {
-      const response = await fetch("/auth/sessions");
-      if (response.ok) {
-        const data = await response.json();
-        setRealAllSessions(data);
-      }
-    } catch (err) {
-      console.error("Error fetching all sessions:", err);
-    }
+      const res = await fetch("/auth/sessions");
+      if (res.ok) setRealAllSessions(await res.json());
+    } catch {}
   };
 
-  // Filtrar tutorías
-  const filteredTutorings = useMemo(() => {
-    return realAllSessions.filter((t) => {
-      const matchSearch =
-        t.subject.toLowerCase().includes(searchTutoring.toLowerCase()) ||
-        t.tutor_name.toLowerCase().includes(searchTutoring.toLowerCase());
-
-      const matchSubject = subjectFilter === "all" || t.subject === subjectFilter;
-      const matchDate = !dateFilter || t.date_time.startsWith(dateFilter);
-
-      return matchSearch && matchSubject && matchDate;
+  const combinedSchedule = useMemo(() => {
+    const blocks: ScheduleBlock[] = enrolledSessions.map(s => {
+      const dt    = new Date(s.date_time);
+      const day   = DAY_INDEX[dt.getDay()];
+      const h     = dt.getHours().toString().padStart(2, "0");
+      const m     = dt.getMinutes().toString().padStart(2, "0");
+      const endDt = new Date(dt.getTime() + s.duration * 60000);
+      return {
+        id: `enroll-${s.id}`, session_id: s.id, day,
+        subject: `[TUT] ${s.subject}`,
+        startTime: `${h}:${m}`,
+        endTime: `${endDt.getHours().toString().padStart(2,"0")}:${endDt.getMinutes().toString().padStart(2,"0")}`,
+        isTutoring: true, isPast: dt < new Date(),
+      };
     });
-  }, [searchTutoring, subjectFilter, dateFilter, realAllSessions]);
+    return [...userSchedule, ...blocks];
+  }, [userSchedule, enrolledSessions]);
 
-  // Filtrar tutorías inscritas
-  const filteredEnrolled = useMemo(() => {
-    return enrolledSessions.filter((t) => {
-      const matchSearch =
-        t.subject.toLowerCase().includes(searchTutoring.toLowerCase()) ||
-        t.tutor_name.toLowerCase().includes(searchTutoring.toLowerCase());
+  const availableSubjects = useMemo(() => [...new Set(realAllSessions.map(t => t.subject))], [realAllSessions]);
 
-      const matchSubject = subjectFilter === "all" || t.subject === subjectFilter;
-      const matchDate = !dateFilter || t.date_time.startsWith(dateFilter);
+  const filteredEnrolled = useMemo(() => enrolledSessions.filter(t => {
+    const matchSearch  = t.subject.toLowerCase().includes(searchTutoring.toLowerCase()) || t.tutor_name.toLowerCase().includes(searchTutoring.toLowerCase());
+    const matchSubject = subjectFilter === "all" || t.subject === subjectFilter;
+    const matchDate    = !dateFilter || t.date_time.startsWith(dateFilter);
+    return matchSearch && matchSubject && matchDate;
+  }), [searchTutoring, subjectFilter, dateFilter, enrolledSessions]);
 
-      return matchSearch && matchSubject && matchDate;
-    });
-  }, [searchTutoring, subjectFilter, dateFilter, enrolledSessions]);
-
-  // Lista de materias únicas para el filtro
-  const availableSubjects = useMemo(() => {
-    return [...new Set(realAllSessions.map(t => t.subject))];
-  }, [realAllSessions]);
+  const activeFiltersCount = [searchTutoring !== "", subjectFilter !== "all", dateFilter !== ""].filter(Boolean).length;
+  const clearFilters = () => { setSearchTutoring(""); setSubjectFilter("all"); setDateFilter(""); };
 
   const handleAddBlock = () => {
-    if (!newBlock.subject.trim()) {
-      alert("Por favor ingresa la materia");
-      return;
-    }
-    if (newBlock.startTime >= newBlock.endTime) {
-      alert("La hora de fin debe ser después de la hora de inicio");
-      return;
-    }
-
-    const newStart = timeToMinutes(newBlock.startTime);
-    const newEnd = timeToMinutes(newBlock.endTime);
-
-    const haySolapamiento = combinedSchedule.some((block) => {
-      if (block.day !== newBlock.day) return false;
-      const blockStart = timeToMinutes(block.startTime);
-      const blockEnd = timeToMinutes(block.endTime);
-      return !(newEnd <= blockStart || newStart >= blockEnd);
+    setBlockError("");
+    if (!newBlock.subject.trim()) { setBlockError("Por favor ingresa el nombre de la materia."); return; }
+    if (newBlock.startTime >= newBlock.endTime) { setBlockError("La hora de fin debe ser después del inicio."); return; }
+    const newStart = timeToMin(newBlock.startTime), newEnd = timeToMin(newBlock.endTime);
+    const conflict = combinedSchedule.some(b => {
+      if (b.day !== newBlock.day) return false;
+      const bs = timeToMin(b.startTime), be = timeToMin(b.endTime);
+      return !(newEnd <= bs || newStart >= be);
     });
-
-    if (haySolapamiento) {
-      alert(`Ya tienes una clase o tutoría en ${newBlock.day} que se solapa con este horario.`);
-      return;
-    }
-
-    const block: ScheduleBlock = {
-      id: Date.now().toString(),
-      ...newBlock,
-    };
-    setUserSchedule([...userSchedule, block]);
+    if (conflict) { setBlockError(`Ya tienes un bloque en ${newBlock.day} que se solapa con este horario.`); return; }
+    setUserSchedule([...userSchedule, { id: Date.now().toString(), ...newBlock }]);
     setNewBlock({ day: "Lunes", subject: "", startTime: "08:00", endTime: "09:00" });
   };
 
+  // Lógica original del compañero: cancelar desde el calendario con session_id
   const handleRemoveBlock = async (id: string, sessionId?: number) => {
-    if (id.startsWith('enroll-') && sessionId) {
-      if (!confirm("¿Estás seguro de que deseas cancelar esta tutoría? El cupo quedará disponible para otro estudiante.")) return;
+    if (id.startsWith("enroll-") && sessionId) {
+      if (!confirm("¿Cancelar esta tutoría? El cupo quedará disponible para otro estudiante.")) return;
       try {
         const token = localStorage.getItem("token");
-        const response = await fetch(`/auth/sessions/${sessionId}/enroll`, {
-          method: "DELETE",
-          headers: { "Authorization": `Bearer ${token}` }
+        const res   = await fetch(`/auth/sessions/${sessionId}/enroll`, {
+          method: "DELETE", headers: { Authorization: `Bearer ${token}` },
         });
-        if (response.ok) {
-          fetchEnrolledSessions();
-          fetchAllSessions();
-        } else {
-          alert("No se pudo cancelar la tutoría.");
-        }
-      } catch (err) {
-        alert("Error de conexión");
-      }
+        if (res.ok) { fetchEnrolledSessions(); fetchAllSessions(); }
+        else alert("No se pudo cancelar la tutoría.");
+      } catch { alert("Error de conexión"); }
       return;
     }
-    setUserSchedule(userSchedule.filter((b) => b.id !== id));
+    setUserSchedule(userSchedule.filter(b => b.id !== id));
   };
 
   const checkSolapamientos = () => {
     const solapados: string[] = [];
-
-    realAllSessions.forEach((tutoria) => {
-      const dt = new Date(tutoria.date_time);
-      const tDay = dayIndexMap[dt.getDay()];
-      const tStartMin = dt.getHours() * 60 + dt.getMinutes();
-      const tEndMin = tStartMin + tutoria.duration;
-
-      const overlaps = userSchedule.some((block) => {
-        if (block.day !== tDay) return false;
-        const bStartMin = timeToMinutes(block.startTime);
-        const bEndMin = timeToMinutes(block.endTime);
-        return !(tEndMin <= bStartMin || tStartMin >= bEndMin);
+    realAllSessions.forEach(tutoria => {
+      const dt    = new Date(tutoria.date_time);
+      const tDay  = DAY_INDEX[dt.getDay()];
+      const tS    = dt.getHours() * 60 + dt.getMinutes();
+      const tE    = tS + tutoria.duration;
+      const found = userSchedule.some(b => {
+        if (b.day !== tDay) return false;
+        const bs = timeToMin(b.startTime), be = timeToMin(b.endTime);
+        return !(tE <= bs || tS >= be);
       });
-
-      if (overlaps) {
-        solapados.push(tutoria.id);
-      }
+      if (found) solapados.push(tutoria.id);
     });
-
-    setSolapamientos(solapados);
-    setTimeout(() => {
-      alert(
-        solapados.length > 0
-          ? `${solapados.length} tutoría(s) se superponen con tu horario`
-          : "¡Ninguna tutoría se superpone! Todas están disponibles"
-      );
-    }, 100);
-  };
-
-
-  const timeToMinutes = (time: string) => {
-    const [h, m] = time.split(":").map(Number);
-    return h * 60 + m;
-  };
-
-  // Contador de filtros activos
-  const activeFiltersCount = [
-    searchTutoring !== "",
-    subjectFilter !== "all",
-    dateFilter !== "",
-  ].filter(Boolean).length;
-
-  // Limpiar filtros
-  const clearFilters = () => {
-    setSearchTutoring("");
-    setSubjectFilter("all");
-    setDateFilter("");
+    setOverlapResult(solapados.length);
+    setTimeout(() => setOverlapResult(null), 5000);
   };
 
   return (
-    <main className="container mx-auto px-4 py-8 max-w-[1600px]">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Mi Horario Académico</h1>
-        <p className="text-muted-foreground text-lg">
-          Carga tus clases y verifica qué tutorías no se solapan con tu horario
-        </p>
-      </div>
+    <main className="container mx-auto px-4 py-8 max-w-7xl animate-fade-in">
 
-      {/* Formulario para agregar bloques */}
-      <Card className="mb-8 shadow-sm">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
-          <CardTitle className="text-lg">Agregar clase o actividad</CardTitle>
+      <section className="mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">Mi horario académico</h1>
+        <p className="text-muted-foreground mt-1">Carga tus clases y verifica qué tutorías no se solapan</p>
+        <div className="mt-4 h-1 w-24 rounded-full unab-gradient" />
+      </section>
+
+      {/* Formulario */}
+      <Card className="mb-6 border border-border/60 shadow-sm">
+        <CardHeader className="pb-3 border-b border-border/40">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Plus size={16} className="text-[#00AEEF]" /> Agregar clase o actividad
+          </CardTitle>
         </CardHeader>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Día</label>
-              <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={newBlock.day}
-                onChange={(e) => setNewBlock({ ...newBlock, day: e.target.value })}
-              >
-                {["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"].map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Materia</label>
-              <Input
-                className="text-sm"
-                placeholder="Ej: Cálculo I"
-                value={newBlock.subject}
-                onChange={(e) => setNewBlock({ ...newBlock, subject: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Inicio</label>
-              <Input
-                type="time"
-                className="text-sm"
-                value={newBlock.startTime}
-                onChange={(e) => setNewBlock({ ...newBlock, startTime: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Fin</label>
-              <Input
-                type="time"
-                className="text-sm"
-                value={newBlock.endTime}
-                onChange={(e) => setNewBlock({ ...newBlock, endTime: e.target.value })}
-              />
-            </div>
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            {[
+              { label: "Día", content: (
+                <select value={newBlock.day} onChange={e => setNewBlock({ ...newBlock, day: e.target.value })}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF]/40">
+                  {ALL_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              )},
+              { label: "Materia", content: (
+                <Input placeholder="Ej: Cálculo I" value={newBlock.subject}
+                  onChange={e => setNewBlock({ ...newBlock, subject: e.target.value })}
+                  onKeyDown={e => e.key === "Enter" && handleAddBlock()} className="text-sm" />
+              )},
+              { label: "Inicio",  content: <Input type="time" value={newBlock.startTime} onChange={e => setNewBlock({ ...newBlock, startTime: e.target.value })} className="text-sm" /> },
+              { label: "Fin",     content: <Input type="time" value={newBlock.endTime}   onChange={e => setNewBlock({ ...newBlock, endTime: e.target.value })}   className="text-sm" /> },
+            ].map(({ label, content }) => (
+              <div key={label} className="space-y-1">
+                <Label className="text-xs font-medium">{label}</Label>
+                {content}
+              </div>
+            ))}
           </div>
-          <div className="flex gap-3">
-            <Button onClick={handleAddBlock} className="bg-blue-600 hover:bg-blue-700">
-              + Agregar clase
+
+          {blockError && (
+            <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg mb-3">
+              <AlertTriangle size={14} className="shrink-0" /> {blockError}
+            </div>
+          )}
+          {overlapResult !== null && (
+            <div className={cn("flex items-center gap-2 text-sm px-3 py-2 rounded-lg mb-3",
+              overlapResult > 0 ? "text-orange-700 bg-orange-50 border border-orange-200" : "text-[#578426] bg-[#8DC63F]/10 border border-[#8DC63F]/30")}>
+              {overlapResult > 0
+                ? <><AlertTriangle size={14} /> {overlapResult} tutoría(s) se superponen con tu horario</>
+                : <><CheckCircle2 size={14} /> ¡Ninguna tutoría se superpone! Todas están disponibles</>}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleAddBlock} className="gap-2 bg-[#00AEEF] hover:bg-[#0090C5] text-white">
+              <Plus size={15} /> Agregar clase
             </Button>
-            <Button onClick={checkSolapamientos} variant="outline">
-              Verificar solapamientos
+            <Button onClick={checkSolapamientos} variant="outline" className="gap-2">
+              <CheckCircle2 size={15} /> Verificar solapamientos
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Horario en formato tabla/grid */}
-      <Card className="mb-8 shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-          <CardTitle>Vista semanal (6:00 - 20:00)</CardTitle>
+      {/* Calendario */}
+      <Card className="mb-6 border border-border/60 shadow-sm">
+        <CardHeader className="pb-3 border-b border-border/40">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <CalendarDays size={16} className="text-[#00AEEF]" /> Vista semanal — 6:00 a 20:00
+            </CardTitle>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#00AEEF]" /> Clase</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#6B2D8B]" /> Tutoría inscrita</span>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="pt-6 overflow-x-auto">
-          <div className="min-w-full">
-            {/* Header con días */}
-            <div className="flex gap-1 mb-4">
-              <div className="w-20 flex-shrink-0"></div>
-              {allDays.map((day) => (
-                <div key={day} className="flex-1 min-w-32 text-center font-semibold text-sm text-gray-700 pb-2 border-b-2 border-blue-200">
-                  {day}
-                </div>
+        <CardContent className="pt-4 overflow-x-auto">
+          <div className="min-w-[640px]">
+            <div className="flex gap-1 mb-2 pl-16">
+              {ALL_DAYS.map(day => (
+                <div key={day} className="flex-1 text-center text-xs font-semibold text-muted-foreground pb-2 border-b border-border/60">{day}</div>
               ))}
             </div>
-
-            {/* Grid de horas */}
             <div className="flex gap-1">
-              {/* Columna de horas */}
-              <div className="w-20 flex-shrink-0">
-                {hoursRange.map((hour) => (
-                  <div key={hour} className="h-24 flex items-start pt-1 text-xs text-gray-500 font-medium border-t border-gray-200">
-                    {hour}
+              <div className="w-14 shrink-0">
+                {HOURS_RANGE.map(hour => (
+                  <div key={hour} className="h-16 flex items-start pt-1">
+                    <span className="text-[10px] text-muted-foreground font-medium">{hour}</span>
                   </div>
                 ))}
               </div>
-
-              {/* Columnas de días */}
-              {allDays.map((day) => (
-                <div key={day} className="flex-1 min-w-32 relative border-l border-gray-100">
-                  {/* Background de horas */}
-                  {hoursRange.map((hour) => (
-                    <div
-                      key={`${day}-${hour}`}
-                      className="h-24 border-t border-gray-200 bg-gray-50 hover:bg-gray-100 transition"
-                    />
+              {ALL_DAYS.map(day => (
+                <div key={day} className="flex-1 relative border-l border-border/30">
+                  {HOURS_RANGE.map(hour => (
+                    <div key={hour} className="h-16 border-t border-border/30 bg-muted/20 hover:bg-muted/40 transition-colors" />
                   ))}
-
-                  {/* Bloques superpuestos */}
-                  {combinedSchedule
-                    .filter((b) => b.day === day)
-                    .map((block) => {
-                      const startMin = timeToMinutes(block.startTime);
-                      const endMin = timeToMinutes(block.endTime);
-                      const baseMin = 6 * 60;
-                      const totalMin = 14 * 60;
-
-                      const topPercent = ((startMin - baseMin) / totalMin) * 100;
-                      const heightPercent = ((endMin - startMin) / totalMin) * 100;
-
-                      return (
-                        <div
-                          key={block.id}
-                          className={`absolute left-1 right-1 rounded p-2 text-xs overflow-hidden shadow-md flex flex-col justify-between hover:shadow-lg transition z-10 ${block.isTutoring ? 'bg-indigo-600 text-white' : 'bg-blue-500 text-white'} ${block.isPast ? 'opacity-60 grayscale' : ''}`}
-                          style={{
-                            top: `${topPercent}%`,
-                            height: `${heightPercent}%`,
-                            minHeight: "40px",
-                          }}
-                        >
-                          <div>
-                            <div className="font-bold text-[10px] md:text-sm line-clamp-2">
-                              {block.subject}
-                              {block.isPast && <span className="ml-1 text-[8px] bg-white/20 px-1 rounded">Finalizada</span>}
-                            </div>
-                            <div className="text-[9px] md:text-xs opacity-90">
-                              {block.startTime} - {block.endTime}
-                            </div>
-                          </div>
-                          {!block.isPast && (
-                            <button
-                              onClick={() => handleRemoveBlock(block.id, block.session_id)}
-                              className="text-red-300 hover:text-red-100 text-[10px] self-start mt-1"
-                            >
-                              {block.isTutoring ? "Cancelar" : "Eliminar"}
-                            </button>
-                          )}
+                  {combinedSchedule.filter(b => b.day === day).map(block => {
+                    const topPct    = ((timeToMin(block.startTime) - 360) / 840) * 100;
+                    const heightPct = ((timeToMin(block.endTime) - timeToMin(block.startTime)) / 840) * 100;
+                    return (
+                      <div key={block.id}
+                        className={cn(
+                          "absolute left-0.5 right-0.5 rounded-md px-1.5 py-1 text-[10px] overflow-hidden shadow-sm border flex flex-col justify-between group/block z-10 transition-shadow hover:shadow-md",
+                          block.isTutoring ? "bg-[#6B2D8B] text-white border-[#5a2576]" : "bg-[#00AEEF] text-white border-[#0090C5]",
+                          block.isPast && "opacity-50 grayscale"
+                        )}
+                        style={{ top: `${topPct}%`, height: `${heightPct}%`, minHeight: "32px" }}>
+                        <div>
+                          <p className="font-semibold leading-tight line-clamp-2">{block.subject}</p>
+                          <p className="opacity-80 mt-0.5">{block.startTime}–{block.endTime}</p>
+                          {block.isPast && <span className="text-[8px] bg-white/20 px-1 rounded">Finalizada</span>}
                         </div>
-                      );
-                    })}
+                        {!block.isPast && (
+                          <button onClick={() => handleRemoveBlock(block.id, block.session_id)}
+                            className="hidden group-hover/block:flex items-center gap-0.5 text-white/70 hover:text-white mt-1 transition-colors">
+                            <Trash2 size={9} /> {block.isTutoring ? "Cancelar" : "Eliminar"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
             </div>
@@ -423,108 +273,78 @@ const Schedule = () => {
         </CardContent>
       </Card>
 
-      {/* Tutorías con filtros */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Clock className="h-6 w-6 text-blue-600" />
-            Tutorías inscritas
+      {/* Tutorías inscritas */}
+      <section>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <BookOpen size={18} className="text-[#00AEEF]" /> Tutorías inscritas
+            <Badge variant="secondary" className="text-xs">{filteredEnrolled.length}</Badge>
           </h2>
-          <Button
-            variant={filtersOpen ? "default" : "outline"}
-            size="sm"
+          <Button variant={filtersOpen ? "default" : "outline"} size="sm"
             onClick={() => setFiltersOpen(!filtersOpen)}
-            className="gap-2"
-          >
-            <Filter className="h-4 w-4" />
-            Filtros
+            className={cn("gap-2", filtersOpen && "bg-[#00AEEF] hover:bg-[#0090C5] border-[#00AEEF]")}>
+            <Filter size={14} /> Filtros
             {activeFiltersCount > 0 && (
-              <Badge variant="secondary" className="ml-1 text-xs">{activeFiltersCount}</Badge>
+              <Badge className="h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-white text-[#00AEEF]">{activeFiltersCount}</Badge>
             )}
           </Button>
         </div>
 
-        {/* Filtros de tutorías */}
         {filtersOpen && (
-          <Card className="mb-4">
+          <Card className="mb-4 border border-border/60 animate-fade-in">
             <CardContent className="pt-4">
-              <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
-                {/* Buscar */}
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar tutoría..."
-                    value={searchTutoring}
-                    onChange={(e) => setSearchTutoring(e.target.value)}
-                    className="pl-10"
-                  />
+                  <Input placeholder="Buscar tutoría o tutor..." value={searchTutoring}
+                    onChange={e => setSearchTutoring(e.target.value)} className="pl-10" />
                 </div>
-
-                {/* Materia */}
                 <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todas las materias" />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Todas las materias" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas las materias</SelectItem>
-                    {availableSubjects.map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
+                    {availableSubjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>
                 </Select>
-
-                {/* Fecha */}
-                <Input
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="bg-card"
-                />
-
-                {/* Limpiar */}
-                {activeFiltersCount > 0 && (
-                  <Button variant="ghost" onClick={clearFilters} className="gap-2">
-                    <X className="h-4 w-4" />
-                    Limpiar
-                  </Button>
-                )}
+                <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="bg-card" />
               </div>
+              {activeFiltersCount > 0 && (
+                <div className="mt-3 pt-3 border-t border-border/40 flex justify-end">
+                  <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-xs h-7"><X size={12} /> Limpiar</Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {/* Resultados */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredEnrolled.map((t) => (
-            <TutoringCard
-              key={t.id}
-              tutoring={{
-                id: t.id,
-                subject: t.subject,
-                tutor: t.tutor_name,
-                room: t.room || "Pendiente",
-                date: new Date(t.date_time).toLocaleDateString(),
-                time: new Date(t.date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                duration: `${t.duration} min`,
-                spotsAvailable: 0,
-                spots: 0,
-                accessibility: ["Inscrito"]
-              }}
-              isEnrolled={true}
-              onEnrollSuccess={async () => {
-                await fetchEnrolledSessions();
-                await fetchAllSessions();
-              }}
-            />
-          ))}
-        </div>
-
-        {filteredEnrolled.length === 0 && (
-          <p className="text-center text-muted-foreground py-12">
-            No se encontraron tutorías con los filtros seleccionados.
-          </p>
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-muted-foreground">
+            <div className="h-6 w-6 rounded-full border-2 border-[#00AEEF] border-t-transparent animate-spin mr-3" />
+            Cargando tutorías inscritas...
+          </div>
+        ) : filteredEnrolled.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 rounded-2xl border-2 border-dashed border-border text-muted-foreground">
+            <BookOpen size={36} className="mb-3 opacity-20" />
+            <p className="text-sm font-medium">No tienes tutorías inscritas aún</p>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredEnrolled.map(t => (
+              <TutoringCard key={t.id}
+                tutoring={{
+                  id: t.id, subject: t.subject, tutor: t.tutor_name,
+                  room: t.room || "Pendiente",
+                  date: new Date(t.date_time).toLocaleDateString("es-CO"),
+                  time: new Date(t.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                  duration: `${t.duration} min`, spotsAvailable: 0, spots: 0, accessibility: ["Inscrito"],
+                }}
+                isEnrolled={true}
+                onEnrollSuccess={async () => { await fetchEnrolledSessions(); await fetchAllSessions(); }}
+              />
+            ))}
+          </div>
         )}
-      </div>
+      </section>
     </main>
   );
 };
