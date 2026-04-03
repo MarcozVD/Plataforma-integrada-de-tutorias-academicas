@@ -7,10 +7,11 @@ import { Lock, School, GraduationCap } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
-  const [studentId, setStudentId] = useState("");
+  const [studentId, setStudentId] = useState(() => localStorage.getItem("rememberedStudentId") || "");
   const [password, setPassword]   = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError]         = useState("");
+  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem("rememberedStudentId"));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,8 +23,20 @@ const Login = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ university_id: studentId, password }),
       });
+      
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("El servidor no respondió correctamente. ¿Está encendido el backend?");
+      }
+      
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Credenciales inválidas");
+
+      if (rememberMe) {
+        localStorage.setItem("rememberedStudentId", studentId);
+      } else {
+        localStorage.removeItem("rememberedStudentId");
+      }
 
       // Lógica original del compañero — guardar en localStorage
       localStorage.setItem("token",    data.access_token);
@@ -87,7 +100,12 @@ const Login = () => {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="w-4 h-4 rounded accent-[#00AEEF]" />
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 rounded accent-[#00AEEF]"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                  />
                   <span className="text-muted-foreground">Recuérdame</span>
                 </label>
                 <a href="#" className="text-[#00AEEF] hover:text-[#0090C5] font-medium transition-colors">
