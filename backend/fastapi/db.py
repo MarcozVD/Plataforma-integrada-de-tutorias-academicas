@@ -22,9 +22,21 @@ with temp_engine.connect() as conn:
 
 temp_engine.dispose()
 
+# Configuración de SSL (Necesario para PlanetScale)
+DB_SSL = os.getenv("DB_SSL", "false").lower() == "true"
+connect_args = {}
+if DB_SSL:
+    connect_args = {
+        "ssl": {
+            "ssl_mode": "verify_identity"
+            # Si tienes un certificado CA específico, se añade aquí:
+            # "ca": "/etc/ssl/certs/ca-certificates.crt" 
+        }
+    }
+
 # Ahora conectar a la base de datos específica
 DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
