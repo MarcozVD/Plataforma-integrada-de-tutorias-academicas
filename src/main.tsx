@@ -7,7 +7,7 @@ window.fetch = async (...args) => {
   let [resource, config] = args;
   if (typeof resource === 'string') {
     if (resource.startsWith('/auth') || resource.startsWith('/api')) {
-      resource = `http://127.0.0.1:8000${resource}`;
+      resource = `http://147.15.137.230:8000${resource}`;
     }
   }
   return originalFetch(resource, config);
