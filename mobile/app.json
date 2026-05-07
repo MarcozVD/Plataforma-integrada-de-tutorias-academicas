@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "PITA",
+    "slug": "pita-tutorias",
+    "version": "1.0.0",
+    "sdkVersion": "54.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tutorias.unab"
+    },
+    "android": {
+      "package": "com.tutorias.unab"
+    },
+    "plugins": ["expo-router"],
+    "scheme": "pita"
+  }
+}
