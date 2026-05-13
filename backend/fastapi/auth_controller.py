@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlalchemy import or_, func
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
 from sqlalchemy.orm import Session
 from db import SessionLocal, init_db
 from models import User, InterestSubject, TutoringPreference, UserDisability, TutoringSession, TutoringEnrollment, Room, RoomAvailability
@@ -9,6 +9,7 @@ import bcrypt
 import traceback
 from fastapi.responses import JSONResponse
 import os
+import re
 from jose import jwt
 from dotenv import load_dotenv
 from typing import Literal
@@ -37,16 +38,70 @@ def get_db():
         db.close()
 
 
-class RegisterIn(BaseModel):
+class _BaseRegister(BaseModel):
     full_name: str
     email: EmailStr
     password: str
     confirm_password: str
     university_id: str
-    carrera: str | None = None
-    user_type: Literal["student", "tutor", "admin"] = "student"
-    disability_type: str | None = None
+    carrera: str
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError("El nombre completo debe tener al menos 3 caracteres")
+        if not re.match(r"^[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]+$", v):
+            raise ValueError("El nombre solo puede contener letras y espacios")
+        return v
+
+    @field_validator("university_id")
+    @classmethod
+    def validate_university_id(cls, v: str) -> str:
+        v = v.strip()
+        if not re.match(r"^\d{5,15}$", v):
+            raise ValueError("El número de identificación debe tener entre 5 y 15 dígitos numéricos")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres")
+        if not any(c.isupper() for c in v):
+            raise ValueError("La contraseña debe contener al menos una letra mayúscula")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("La contraseña debe contener al menos un número")
+        return v
+
+    @field_validator("carrera")
+    @classmethod
+    def validate_carrera(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError("La carrera debe tener al menos 2 caracteres")
+        return v
+
+    @model_validator(mode="after")
+    def check_passwords_match(self) -> "_BaseRegister":
+        if self.password != self.confirm_password:
+            raise ValueError("Las contraseñas no coinciden")
+        return self
+
+
+class StudentRegisterIn(_BaseRegister):
+    """Registro para estudiantes: incluye la discapacidad que el estudiante tiene."""
+    user_type: Literal["student"] = "student"
+    disability_type: Literal["ninguna", "visual", "auditiva", "motriz", "cognitiva"]
     disability_description: str | None = None
+
+
+class TutorRegisterIn(_BaseRegister):
+    """Registro para tutores: incluye la discapacidad que el tutor puede atender."""
+    user_type: Literal["tutor"] = "tutor"
+    disability_support_type: Literal["ninguna", "visual", "auditiva", "motriz", "cognitiva", "todas"]
+    disability_support_description: str | None = None
 
 
 class RoomAvailabilityIn(BaseModel):
@@ -94,54 +149,76 @@ class CreateTutoringSessionIn(BaseModel):
     accessibility_type: str | None = None
 
 
-@router.post("/register", response_model=dict, tags=["Autenticación"])
-def register(payload: RegisterIn, db: Session = Depends(get_db)):
+def _save_user(payload: _BaseRegister, user_type: str, db: Session) -> dict:
+    """Shared logic: check duplicates, create user, return dict. Caller adds disability row."""
     print(f"[auth] Register attempt: university_id={payload.university_id}, email={payload.email}")
-    
-    if payload.password != payload.confirm_password:
-        raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
-    
-    existing_student = db.query(User).filter(User.university_id == payload.university_id).first()
-    if existing_student:
-        print(f"[auth] Register failed: university_id {payload.university_id} already exists")
+
+    if db.query(User).filter(User.university_id == payload.university_id).first():
         raise HTTPException(status_code=400, detail="El número de identificación académica ya está registrado")
-    
-    # Verificar email único
-    existing_email = db.query(User).filter(User.email == payload.email.lower()).first()
-    if existing_email:
-        print(f"[auth] Register failed: email {payload.email} already exists")
+
+    if db.query(User).filter(User.email == payload.email.lower()).first():
         raise HTTPException(status_code=400, detail="El correo ya está registrado")
-    
+
     hashed = hash_password(payload.password)
     user = User(
         university_id=payload.university_id,
-        full_name=payload.full_name, 
-        email=payload.email.lower(), 
-        hashed_password=hashed, 
-        user_type=payload.user_type, 
-        carrera=payload.carrera
+        full_name=payload.full_name,
+        email=payload.email.lower(),
+        hashed_password=hashed,
+        user_type=user_type,
+        carrera=payload.carrera,
     )
     db.add(user)
-    
-    # Agregar discapacidad si existe
-    if payload.disability_type and payload.disability_type != "none":
-        disability = UserDisability(
+    return user
+
+
+@router.post("/register/student", response_model=dict, tags=["Autenticación"])
+def register_student(payload: StudentRegisterIn, db: Session = Depends(get_db)):
+    """Registro de estudiante. Campo disability_type = discapacidad que el estudiante tiene."""
+    user = _save_user(payload, "student", db)
+
+    if payload.disability_type != "ninguna":
+        db.add(UserDisability(
             university_id=payload.university_id,
             disability_type=payload.disability_type,
-            disability_description=payload.disability_description
-        )
-        db.add(disability)
-    
+            disability_description=payload.disability_description,
+        ))
+
     try:
         db.commit()
         db.refresh(user)
-        print(f"[auth] Created user id={user.id} university_id={user.university_id} email={user.email}")
-        return {"id": user.id, "university_id": user.university_id, "email": user.email, "full_name": user.full_name, "user_type": user.user_type}
+        print(f"[auth] Created student id={user.id} university_id={user.university_id}")
+        return {"id": user.id, "university_id": user.university_id, "email": user.email,
+                "full_name": user.full_name, "user_type": user.user_type}
     except Exception as e:
         db.rollback()
         tb = traceback.format_exc()
-        print("[auth] ERROR creating user:", e)
-        print(tb)
+        print("[auth] ERROR creating student:", e)
+        return JSONResponse(status_code=500, content={"error": str(e), "trace": tb.splitlines()[-3:]})
+
+
+@router.post("/register/tutor", response_model=dict, tags=["Autenticación"])
+def register_tutor(payload: TutorRegisterIn, db: Session = Depends(get_db)):
+    """Registro de tutor. Campo disability_support_type = discapacidad que el tutor puede atender."""
+    user = _save_user(payload, "tutor", db)
+
+    if payload.disability_support_type != "ninguna":
+        db.add(UserDisability(
+            university_id=payload.university_id,
+            disability_type=payload.disability_support_type,
+            disability_description=payload.disability_support_description,
+        ))
+
+    try:
+        db.commit()
+        db.refresh(user)
+        print(f"[auth] Created tutor id={user.id} university_id={user.university_id}")
+        return {"id": user.id, "university_id": user.university_id, "email": user.email,
+                "full_name": user.full_name, "user_type": user.user_type}
+    except Exception as e:
+        db.rollback()
+        tb = traceback.format_exc()
+        print("[auth] ERROR creating tutor:", e)
         return JSONResponse(status_code=500, content={"error": str(e), "trace": tb.splitlines()[-3:]})
 
 
