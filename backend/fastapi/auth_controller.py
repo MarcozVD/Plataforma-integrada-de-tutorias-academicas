@@ -661,10 +661,17 @@ def get_enrolled_sessions(
         user_id = int(payload_jwt.get("sub"))
         
         enrollments = db.query(TutoringEnrollment).filter(TutoringEnrollment.student_id == user_id).all()
-        
+
+        now = datetime.now()
         result = []
         for e in enrollments:
             s = e.session
+            if not s:
+                continue
+            # Exclude sessions that have already finished
+            session_end = s.date_time + timedelta(minutes=s.duration)
+            if session_end < now:
+                continue
             tutor = db.query(User).filter(User.id == s.tutor_id).first()
             result.append({
                 "id": s.id,
@@ -674,7 +681,7 @@ def get_enrolled_sessions(
                 "room": s.room,
                 "tutor_name": tutor.full_name if tutor else "Tutor Desconocido"
             })
-            
+
         return result
     except Exception as e:
         print("[auth] ERROR getting enrolled sessions:", e)

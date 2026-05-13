@@ -70,12 +70,15 @@ const Schedule = () => {
       const h     = dt.getHours().toString().padStart(2, "0");
       const m     = dt.getMinutes().toString().padStart(2, "0");
       const endDt = new Date(dt.getTime() + s.duration * 60000);
+      const now   = new Date();
       return {
         id: `enroll-${s.id}`, session_id: s.id, day,
         subject: `[TUT] ${s.subject}`,
         startTime: `${h}:${m}`,
         endTime: `${endDt.getHours().toString().padStart(2,"0")}:${endDt.getMinutes().toString().padStart(2,"0")}`,
-        isTutoring: true, isPast: dt < new Date(),
+        isTutoring: true,
+        // isPast is true only while the session is actively happening (started but not ended)
+        isPast: dt < now && endDt > now,
       };
     });
     return [...userSchedule, ...blocks];
@@ -255,12 +258,18 @@ const Schedule = () => {
                         <div>
                           <p className="font-semibold leading-tight line-clamp-2">{block.subject}</p>
                           <p className="opacity-80 mt-0.5">{block.startTime}–{block.endTime}</p>
-                          {block.isPast && <span className="text-[8px] bg-white/20 px-1 rounded">Finalizada</span>}
+                          {block.isPast && <span className="text-[8px] bg-white/20 px-1 rounded">En curso</span>}
                         </div>
-                        {!block.isPast && (
+                        {!block.isPast && !block.isTutoring && (
                           <button onClick={() => handleRemoveBlock(block.id, block.session_id)}
                             className="hidden group-hover/block:flex items-center gap-0.5 text-white/70 hover:text-white mt-1 transition-colors">
-                            <Trash2 size={9} /> {block.isTutoring ? "Cancelar" : "Eliminar"}
+                            <Trash2 size={9} /> Eliminar
+                          </button>
+                        )}
+                        {!block.isPast && block.isTutoring && (
+                          <button onClick={() => handleRemoveBlock(block.id, block.session_id)}
+                            className="hidden group-hover/block:flex items-center gap-0.5 text-white/70 hover:text-white mt-1 transition-colors">
+                            <Trash2 size={9} /> Cancelar inscripción
                           </button>
                         )}
                       </div>
