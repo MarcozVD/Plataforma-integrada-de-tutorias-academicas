@@ -479,6 +479,122 @@ const AdminPanel = () => {
             </div>
           </div>
         </TabsContent>
+
+        {/* Estadísticas */}
+        <TabsContent value="stats">
+          {(() => {
+            const totalEnrolled = sessions.reduce((a, s) => a + Math.max(0, (s.spots ?? 0) - (s.spots_available ?? s.spots ?? 0)), 0);
+
+            // Top materias
+            const subjectCount: Record<string, number> = {};
+            sessions.forEach(s => { subjectCount[s.subject] = (subjectCount[s.subject] || 0) + 1; });
+            const topSubjects = Object.entries(subjectCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const maxSubj = topSubjects[0]?.[1] || 1;
+
+            // Top tutores por inscritos
+            const tutorEnrolled: Record<string, number> = {};
+            sessions.forEach(s => {
+              const name = s.tutor_name || s.tutor_id || "Desconocido";
+              tutorEnrolled[name] = (tutorEnrolled[name] || 0) + Math.max(0, (s.spots ?? 0) - (s.spots_available ?? s.spots ?? 0));
+            });
+            const topTutors = Object.entries(tutorEnrolled).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const maxTutor = topTutors[0]?.[1] || 1;
+
+            // Distribución por rol
+            const roleCount = { student: 0, tutor: 0, admin: 0 };
+            users.forEach(u => { if (u.user_type in roleCount) roleCount[u.user_type as keyof typeof roleCount]++; });
+
+            // Ocupación de salones
+            const occupiedRooms = rooms.filter(r => !r.available).length;
+            const occupancyPct  = rooms.length ? Math.round((occupiedRooms / rooms.length) * 100) : 0;
+
+            const Bar = ({ value, max, color }: { value: number; max: number; color: string }) => (
+              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                <div className={`h-full rounded-full ${color}`} style={{ width: `${(value / max) * 100}%` }} />
+              </div>
+            );
+
+            return (
+              <div className="grid md:grid-cols-2 gap-4">
+                {/* Materias más solicitadas */}
+                <Card className="border border-border/60 shadow-sm">
+                  <CardHeader className="pb-3 border-b border-border/40">
+                    <CardTitle className="text-sm flex items-center gap-2"><BookOpen size={14} className="text-[#00AEEF]" /> Materias más impartidas</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4 space-y-3">
+                    {topSubjects.length === 0 ? <p className="text-xs text-muted-foreground">Sin datos</p> :
+                      topSubjects.map(([subj, count]) => (
+                        <div key={subj} className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="truncate font-medium text-foreground max-w-[200px]">{subj}</span>
+                            <span className="text-muted-foreground shrink-0 ml-2">{count} sesión{count !== 1 ? "es" : ""}</span>
+                          </div>
+                          <Bar value={count} max={maxSubj} color="bg-[#00AEEF]" />
+                        </div>
+                      ))}
+                  </CardContent>
+                </Card>
+
+                {/* Top tutores */}
+                <Card className="border border-border/60 shadow-sm">
+                  <CardHeader className="pb-3 border-b border-border/40">
+                    <CardTitle className="text-sm flex items-center gap-2"><Users size={14} className="text-[#8DC63F]" /> Tutores con más inscritos</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4 space-y-3">
+                    {topTutors.length === 0 ? <p className="text-xs text-muted-foreground">Sin datos</p> :
+                      topTutors.map(([name, count]) => (
+                        <div key={name} className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="truncate font-medium text-foreground max-w-[200px]">{name}</span>
+                            <span className="text-muted-foreground shrink-0 ml-2">{count} inscrito{count !== 1 ? "s" : ""}</span>
+                          </div>
+                          <Bar value={count} max={maxTutor} color="bg-[#8DC63F]" />
+                        </div>
+                      ))}
+                  </CardContent>
+                </Card>
+
+                {/* Distribución de usuarios */}
+                <Card className="border border-border/60 shadow-sm">
+                  <CardHeader className="pb-3 border-b border-border/40">
+                    <CardTitle className="text-sm flex items-center gap-2"><UserIcon size={14} className="text-[#6B2D8B]" /> Distribución de usuarios</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4 grid grid-cols-3 gap-3 text-center">
+                    {[
+                      { label: "Estudiantes", value: roleCount.student, color: "text-[#0090C5]", bg: "bg-[#00AEEF]/10" },
+                      { label: "Tutores",     value: roleCount.tutor,   color: "text-[#578426]", bg: "bg-[#8DC63F]/10" },
+                      { label: "Admins",      value: roleCount.admin,   color: "text-[#6B2D8B]", bg: "bg-[#6B2D8B]/10" },
+                    ].map(({ label, value, color, bg }) => (
+                      <div key={label} className={`rounded-xl ${bg} py-4`}>
+                        <p className={`text-2xl font-bold ${color}`}>{value}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                {/* Ocupación y totales */}
+                <Card className="border border-border/60 shadow-sm">
+                  <CardHeader className="pb-3 border-b border-border/40">
+                    <CardTitle className="text-sm flex items-center gap-2"><TrendingUp size={14} className="text-[#FF9900]" /> Resumen de actividad</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4 space-y-4">
+                    {[
+                      { label: "Total inscritos en tutorías", value: totalEnrolled,       suffix: "estudiantes" },
+                      { label: "Sesiones totales",            value: sessions.length,     suffix: "sesiones"    },
+                      { label: "Salones ocupados ahora",      value: `${occupiedRooms} / ${rooms.length}`, suffix: `(${occupancyPct}%)` },
+                    ].map(({ label, value, suffix }) => (
+                      <div key={label} className="flex items-center justify-between border-b border-border/30 pb-3 last:border-0 last:pb-0">
+                        <span className="text-sm text-muted-foreground">{label}</span>
+                        <span className="text-sm font-semibold text-foreground">{value} <span className="font-normal text-muted-foreground">{suffix}</span></span>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })()}
+        </TabsContent>
       </Tabs>
 
       {/* Modal detalle usuario */}

@@ -18,6 +18,7 @@ const Index = () => {
   const [realTutorings, setRealTutorings] = useState<any[]>([]);
   const [rooms, setRooms]                 = useState<any[]>([]);
   const [enrolledIds, setEnrolledIds]     = useState<Set<number>>(new Set());
+  const [waitlistIds, setWaitlistIds]     = useState<Set<number>>(new Set());
   const [loading, setLoading]             = useState(true);
 
   // Lógica original del compañero
@@ -32,7 +33,7 @@ const Index = () => {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchTutorings(), fetchEnrolled(), fetchRooms()]);
+      await Promise.all([fetchTutorings(), fetchEnrolled(), fetchWaitlist(), fetchRooms()]);
       setLoading(false);
     };
     loadData();
@@ -55,6 +56,20 @@ const Index = () => {
       if (res.ok) {
         const data = await res.json();
         setEnrolledIds(new Set(data.map((s: any) => s.id)));
+      }
+    } catch {}
+  };
+
+  const fetchWaitlist = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await fetch("/auth/student/waitlist", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWaitlistIds(new Set(data.map((e: any) => e.session_id)));
       }
     } catch {}
   };
@@ -321,7 +336,8 @@ const Index = () => {
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredTutorings.map((t) => (
                   <TutoringCard key={t.id} tutoring={t} isEnrolled={enrolledIds.has(t.id)}
-                    onEnrollSuccess={async () => { await fetchTutorings(); await fetchEnrolled(); }} />
+                    isWaitlisted={!enrolledIds.has(t.id) && waitlistIds.has(t.id)}
+                    onEnrollSuccess={async () => { await Promise.all([fetchTutorings(), fetchEnrolled(), fetchWaitlist()]); }} />
                 ))}
               </div>
               {filteredTutorings.length === 0 && (

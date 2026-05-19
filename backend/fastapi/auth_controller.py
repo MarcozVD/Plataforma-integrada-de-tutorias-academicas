@@ -3,8 +3,9 @@ from sqlalchemy import func
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 from sqlalchemy.orm import Session, joinedload
 from db import SessionLocal
-from models import User, InterestSubject, TutoringPreference, UserDisability, TutoringSession, TutoringEnrollment, Room, RoomAvailability
+from models import User, InterestSubject, TutoringPreference, UserDisability, TutoringSession, TutoringEnrollment, Room, RoomAvailability, PasswordResetToken, WaitlistEntry, TutorRating
 import bcrypt
+import secrets
 import traceback
 from fastapi.responses import JSONResponse
 import os
@@ -18,6 +19,8 @@ from email_service import (
     email_enrollment_confirmation,
     email_enrollment_cancelled,
     email_session_cancelled_by_tutor,
+    email_password_reset,
+    email_waitlist_spot_available,
 )
 
 load_dotenv()
@@ -258,6 +261,48 @@ def login(payload: LoginIn, db: Session = Depends(get_db)):
         "email": user.email,
         "carrera": user.carrera
     }
+
+
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordIn(BaseModel):
+    token: str
+    new_password: str
+
+
+@router.post("/forgot-password", tags=["Autenticación"])
+def forgot_password(payload: ForgotPasswordIn, bg: BackgroundTasks, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    # Always return 200 to avoid email enumeration
+    if not user:
+        return {"message": "Si el correo existe, recibirás un enlace de recuperación."}
+    token = secrets.token_hex(32)
+    expires = datetime.utcnow() + timedelta(minutes=30)
+    db.add(PasswordResetToken(user_id=user.id, token=token, expires_at=expires))
+    db.commit()
+    reset_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/reset-password?token={token}"
+    bg.add_task(email_password_reset, user.email, user.full_name, reset_url)
+    return {"message": "Si el correo existe, recibirás un enlace de recuperación."}
+
+
+@router.post("/reset-password", tags=["Autenticación"])
+def reset_password(payload: ResetPasswordIn, db: Session = Depends(get_db)):
+    record = (
+        db.query(PasswordResetToken)
+        .filter(PasswordResetToken.token == payload.token)
+        .first()
+    )
+    if not record or record.used or record.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Token inválido o expirado.")
+    user = db.query(User).filter(User.id == record.user_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Token inválido o expirado.")
+    user.hashed_password = hash_password(payload.new_password)
+    record.used = True
+    db.commit()
+    return {"message": "Contraseña actualizada correctamente."}
 
 
 def get_user_preferences(db: Session, university_id: str):
@@ -643,6 +688,26 @@ def enroll_session(
         if tutoring_session.spots_available <= 0:
             raise HTTPException(status_code=400, detail="No hay cupos disponibles")
 
+        # Overlap check: reject if student has another session that overlaps in time
+        new_start = tutoring_session.date_time
+        new_end   = new_start + timedelta(minutes=tutoring_session.duration)
+        other_enrollments = (
+            db.query(TutoringEnrollment)
+            .filter(TutoringEnrollment.student_id == user_id)
+            .all()
+        )
+        for enr in other_enrollments:
+            s = enr.session
+            if not s:
+                continue
+            s_start = s.date_time
+            s_end   = s_start + timedelta(minutes=s.duration)
+            if new_start < s_end and new_end > s_start:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Tienes un solapamiento con la tutoría de {s.subject} ({s_start.strftime('%H:%M')} – {s_end.strftime('%H:%M')})"
+                )
+
         student = db.query(User).filter(User.id == user_id).first()
         tutor   = db.query(User).filter(User.id == tutoring_session.tutor_id).first()
 
@@ -757,6 +822,26 @@ def cancel_enrollment(
                 dt.strftime("%d/%m/%Y"),
                 dt.strftime("%H:%M"),
             )
+            # Notify first waitlist entry
+            first_wait = (
+                db.query(WaitlistEntry)
+                .filter(WaitlistEntry.session_id == session_id, WaitlistEntry.notified == False)
+                .order_by(WaitlistEntry.position)
+                .first()
+            )
+            if first_wait:
+                wait_student = db.query(User).filter(User.id == first_wait.student_id).first()
+                if wait_student:
+                    first_wait.notified = True
+                    db.commit()
+                    bg.add_task(
+                        email_waitlist_spot_available,
+                        wait_student.email,
+                        wait_student.full_name,
+                        tutoring_session.subject,
+                        dt.strftime("%d/%m/%Y"),
+                        dt.strftime("%H:%M"),
+                    )
 
         return {"success": True, "message": "Inscripción cancelada"}
     except HTTPException:
@@ -765,6 +850,209 @@ def cancel_enrollment(
         db.rollback()
         print("[auth] ERROR cancelling enrollment:", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sessions/{session_id}/waitlist", tags=["Tutorías"])
+def join_waitlist(
+    session_id: int,
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Añade al estudiante a la lista de espera de una sesión llena"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload_jwt = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload_jwt.get("sub"))
+
+        session = db.query(TutoringSession).filter(TutoringSession.id == session_id).first()
+        if not session:
+            raise HTTPException(status_code=404, detail="Tutoría no encontrada")
+
+        already_enrolled = db.query(TutoringEnrollment).filter(
+            TutoringEnrollment.student_id == user_id,
+            TutoringEnrollment.session_id == session_id
+        ).first()
+        if already_enrolled:
+            raise HTTPException(status_code=400, detail="Ya estás inscrito en esta tutoría")
+
+        already_waiting = db.query(WaitlistEntry).filter(
+            WaitlistEntry.student_id == user_id,
+            WaitlistEntry.session_id == session_id
+        ).first()
+        if already_waiting:
+            raise HTTPException(status_code=400, detail="Ya estás en la lista de espera")
+
+        last_pos = db.query(func.max(WaitlistEntry.position)).filter(
+            WaitlistEntry.session_id == session_id
+        ).scalar() or 0
+        db.add(WaitlistEntry(student_id=user_id, session_id=session_id, position=last_pos + 1))
+        db.commit()
+        return {"success": True, "position": last_pos + 1}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/sessions/{session_id}/waitlist", tags=["Tutorías"])
+def leave_waitlist(
+    session_id: int,
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Elimina al estudiante de la lista de espera"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload_jwt = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload_jwt.get("sub"))
+
+        entry = db.query(WaitlistEntry).filter(
+            WaitlistEntry.student_id == user_id,
+            WaitlistEntry.session_id == session_id
+        ).first()
+        if not entry:
+            raise HTTPException(status_code=404, detail="No estás en la lista de espera")
+        db.delete(entry)
+        db.commit()
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/student/waitlist", tags=["Estudiantes"])
+def get_student_waitlist(
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Retorna las sesiones en lista de espera del estudiante"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload_jwt = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload_jwt.get("sub"))
+
+        entries = (
+            db.query(WaitlistEntry)
+            .filter(WaitlistEntry.student_id == user_id)
+            .order_by(WaitlistEntry.session_id)
+            .all()
+        )
+        return [
+            {
+                "session_id": e.session_id,
+                "position": e.position,
+                "subject": e.session.subject if e.session else "",
+                "date_time": e.session.date_time.isoformat() if e.session else "",
+            }
+            for e in entries
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class RateSessionIn(BaseModel):
+    stars: int
+    comment: str = ""
+
+
+@router.post("/sessions/{session_id}/rate", tags=["Tutorías"])
+def rate_session(
+    session_id: int,
+    payload: RateSessionIn,
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Permite a un estudiante valorar una sesión ya finalizada (1-5 estrellas)"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    if payload.stars < 1 or payload.stars > 5:
+        raise HTTPException(status_code=422, detail="Las estrellas deben estar entre 1 y 5")
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload_jwt = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload_jwt.get("sub"))
+
+        session = db.query(TutoringSession).filter(TutoringSession.id == session_id).first()
+        if not session:
+            raise HTTPException(status_code=404, detail="Sesión no encontrada")
+        if session.date_time > datetime.utcnow():
+            raise HTTPException(status_code=400, detail="Solo puedes valorar sesiones ya finalizadas")
+
+        enrollment = db.query(TutoringEnrollment).filter(
+            TutoringEnrollment.student_id == user_id,
+            TutoringEnrollment.session_id == session_id
+        ).first()
+        if not enrollment:
+            raise HTTPException(status_code=403, detail="No estuviste inscrito en esta sesión")
+
+        existing = db.query(TutorRating).filter(
+            TutorRating.student_id == user_id,
+            TutorRating.session_id == session_id
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Ya valoraste esta sesión")
+
+        db.add(TutorRating(
+            student_id=user_id,
+            tutor_id=session.tutor_id,
+            session_id=session_id,
+            stars=payload.stars,
+            comment=payload.comment.strip() or None,
+        ))
+        db.commit()
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tutor/{tutor_id}/ratings", tags=["Tutores"])
+def get_tutor_ratings(tutor_id: int, db: Session = Depends(get_db)):
+    """Retorna valoraciones y promedio de un tutor"""
+    ratings = db.query(TutorRating).filter(TutorRating.tutor_id == tutor_id).all()
+    if not ratings:
+        return {"average": 0, "count": 0, "reviews": []}
+    avg = sum(r.stars for r in ratings) / len(ratings)
+    reviews = [
+        {
+            "stars": r.stars,
+            "comment": r.comment,
+            "student_name": r.student.full_name if r.student else "Estudiante",
+            "date": r.created_at.strftime("%d/%m/%Y") if r.created_at else "",
+        }
+        for r in sorted(ratings, key=lambda x: x.created_at or datetime.min, reverse=True)[:20]
+    ]
+    return {"average": round(avg, 1), "count": len(ratings), "reviews": reviews}
+
+
+@router.get("/student/my-ratings", tags=["Estudiantes"])
+def get_my_ratings(
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Retorna los session_id que el estudiante ya valoró"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload_jwt = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload_jwt.get("sub"))
+        rated = db.query(TutorRating.session_id).filter(TutorRating.student_id == user_id).all()
+        return [r[0] for r in rated]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/student/notifications", tags=["Estudiantes"])
 def get_student_notifications(

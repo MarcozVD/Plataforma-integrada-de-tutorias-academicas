@@ -1,4 +1,4 @@
-import { Calendar, Clock, MapPin, User, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Calendar, Clock, MapPin, User, Loader2, CheckCircle2, Clock3 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,21 +20,22 @@ interface TutoringProps {
     accessibility: string[];
   };
   isEnrolled?: boolean;
+  isWaitlisted?: boolean;
   onEnrollSuccess?: () => void;
 }
 
-const TutoringCard = ({ tutoring, isEnrolled, onEnrollSuccess }: TutoringProps) => {
+const TutoringCard = ({ tutoring, isEnrolled, isWaitlisted, onEnrollSuccess }: TutoringProps) => {
   const [enrolling, setEnrolling] = useState(false);
+  const [waitlisting, setWaitlisting] = useState(false);
   const { toast } = useToast();
 
-  // Lógica original preservada — lee de localStorage
-  const userType  = localStorage.getItem("userType");
+  const userType   = localStorage.getItem("userType");
   const spotsRatio = tutoring.spots > 0 ? tutoring.spotsAvailable / tutoring.spots : 1;
-  const isFull    = tutoring.spotsAvailable === 0;
-  const isTutor   = userType === "tutor";
+  const isFull     = tutoring.spotsAvailable === 0;
+  const isTutor    = userType === "tutor";
 
   const spotsBadgeClass =
-    isFull           ? "bg-red-50 text-red-700 border-red-200"            :
+    isFull            ? "bg-red-50 text-red-700 border-red-200"           :
     spotsRatio <= 0.2 ? "bg-orange-50 text-orange-700 border-orange-200"  :
     spotsRatio <= 0.5 ? "bg-yellow-50 text-yellow-700 border-yellow-200"  :
                         "bg-[#8DC63F]/10 text-[#578426] border-[#8DC63F]/30";
@@ -61,17 +62,39 @@ const TutoringCard = ({ tutoring, isEnrolled, onEnrollSuccess }: TutoringProps) 
     }
   };
 
+  const handleWaitlist = async () => {
+    setWaitlisting(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res   = await fetch(`/auth/sessions/${tutoring.id}/waitlist`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast({ title: "En lista de espera", description: `Eres el #${data.position} en la lista. Te notificaremos si se libera un cupo.` });
+        onEnrollSuccess?.();
+      } else {
+        toast({ variant: "destructive", title: "Error", description: data.detail || "No se pudo unir a la lista de espera" });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Error de conexión", description: "Inténtalo de nuevo más tarde" });
+    } finally {
+      setWaitlisting(false);
+    }
+  };
+
+  const topBarColor = isEnrolled ? "bg-[#8DC63F]" : isWaitlisted ? "bg-amber-400" : isFull ? "bg-red-400" : "bg-[#00AEEF]";
+
   return (
     <Card role="article" aria-label={`Tutoría de ${tutoring.subject} con ${tutoring.tutor}`} className={cn(
       "overflow-hidden transition-all hover:shadow-md group",
-      isEnrolled  ? "border-[#8DC63F]/40 hover:border-[#8DC63F]/60" :
-      isFull      ? "border-border/40 bg-muted/10"                   :
-                    "border-border/60 hover:border-[#00AEEF]/30"
+      isEnrolled   ? "border-[#8DC63F]/40 hover:border-[#8DC63F]/60"  :
+      isWaitlisted ? "border-amber-300/50 bg-amber-50/30"              :
+      isFull       ? "border-border/40 bg-muted/10"                    :
+                     "border-border/60 hover:border-[#00AEEF]/30"
     )}>
-      {/* Barra superior */}
-      <div className={cn("h-1 w-full",
-        isEnrolled ? "bg-[#8DC63F]" : isFull ? "bg-red-400" : "bg-[#00AEEF]"
-      )} />
+      <div className={cn("h-1 w-full", topBarColor)} />
 
       <CardContent className="p-4">
         {/* Header */}
@@ -88,6 +111,10 @@ const TutoringCard = ({ tutoring, isEnrolled, onEnrollSuccess }: TutoringProps) 
           {isEnrolled ? (
             <Badge variant="outline" className="shrink-0 text-[11px] gap-1 bg-[#8DC63F]/10 text-[#578426] border-[#8DC63F]/30">
               <CheckCircle2 size={10} /> Inscrito
+            </Badge>
+          ) : isWaitlisted ? (
+            <Badge variant="outline" className="shrink-0 text-[11px] gap-1 bg-amber-50 text-amber-700 border-amber-200">
+              <Clock3 size={10} /> En espera
             </Badge>
           ) : (
             <Badge variant="outline" className={cn("shrink-0 text-[11px] font-semibold", spotsBadgeClass)}>
@@ -113,7 +140,7 @@ const TutoringCard = ({ tutoring, isEnrolled, onEnrollSuccess }: TutoringProps) 
         </div>
 
         {/* Accesibilidad */}
-        {!isEnrolled && tutoring.accessibility.length > 0 && (
+        {!isEnrolled && !isWaitlisted && tutoring.accessibility.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">
             {tutoring.accessibility.map((a) => (
               <Badge key={a} variant="outline"
@@ -125,7 +152,7 @@ const TutoringCard = ({ tutoring, isEnrolled, onEnrollSuccess }: TutoringProps) 
         )}
 
         {/* Barra de cupos */}
-        {!isEnrolled && tutoring.spots > 0 && (
+        {!isEnrolled && !isWaitlisted && tutoring.spots > 0 && (
           <div className="mb-3">
             <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
               <span>Cupos</span>
@@ -133,7 +160,7 @@ const TutoringCard = ({ tutoring, isEnrolled, onEnrollSuccess }: TutoringProps) 
             </div>
             <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
               <div className={cn("h-full rounded-full transition-all",
-                isFull           ? "bg-red-400"    :
+                isFull            ? "bg-red-400"    :
                 spotsRatio <= 0.2 ? "bg-orange-400" :
                 spotsRatio <= 0.5 ? "bg-yellow-400" :
                                     "bg-[#8DC63F]"
@@ -143,33 +170,36 @@ const TutoringCard = ({ tutoring, isEnrolled, onEnrollSuccess }: TutoringProps) 
         )}
 
         {/* Botón */}
-        <Button
-          className={cn(
-            "w-full h-9 text-sm font-semibold transition-all gap-2",
-            isEnrolled
-              ? "bg-[#8DC63F]/10 text-[#578426] border border-[#8DC63F]/40 hover:bg-[#8DC63F]/20"
-              : isTutor
-              ? "bg-muted text-muted-foreground cursor-default"
-              : isFull
-              ? "bg-red-50 text-red-500 border border-red-200 cursor-not-allowed"
-              : "bg-[#00AEEF] hover:bg-[#0090C5] text-white"
-          )}
-          onClick={!isEnrolled && !isTutor && !isFull ? handleEnroll : undefined}
-          disabled={enrolling || isFull || isEnrolled || isTutor}
-          variant="ghost"
-        >
-          {enrolling ? (
-            <><Loader2 size={14} className="animate-spin" /> Inscribiendo...</>
-          ) : isTutor ? (
-            "Tu sesión programada"
-          ) : isEnrolled ? (
-            <><CheckCircle2 size={14} /> Ya estás inscrito</>
-          ) : isFull ? (
-            <><XCircle size={14} /> Sin cupos disponibles</>
-          ) : (
-            "Inscribirme ahora"
-          )}
-        </Button>
+        {isTutor ? (
+          <Button variant="ghost" disabled className="w-full h-9 text-sm font-semibold bg-muted text-muted-foreground">
+            Tu sesión programada
+          </Button>
+        ) : isEnrolled ? (
+          <Button variant="ghost" disabled className="w-full h-9 text-sm font-semibold bg-[#8DC63F]/10 text-[#578426] border border-[#8DC63F]/40">
+            <CheckCircle2 size={14} /> Ya estás inscrito
+          </Button>
+        ) : isWaitlisted ? (
+          <Button variant="ghost" disabled className="w-full h-9 text-sm font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+            <Clock3 size={14} /> En lista de espera
+          </Button>
+        ) : isFull ? (
+          <Button
+            variant="ghost"
+            className="w-full h-9 text-sm font-semibold bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100"
+            onClick={handleWaitlist}
+            disabled={waitlisting}
+          >
+            {waitlisting ? <><Loader2 size={14} className="animate-spin" /> Procesando...</> : <><Clock3 size={14} /> Unirme a lista de espera</>}
+          </Button>
+        ) : (
+          <Button
+            className="w-full h-9 text-sm font-semibold bg-[#00AEEF] hover:bg-[#0090C5] text-white gap-2"
+            onClick={handleEnroll}
+            disabled={enrolling}
+          >
+            {enrolling ? <><Loader2 size={14} className="animate-spin" /> Inscribiendo...</> : "Inscribirme ahora"}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

@@ -13,6 +13,8 @@ import StudentProfile from "./pages/StudentProfile";
 import TutorProfile from "./pages/TutorProfile";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,7 +29,7 @@ import { ThemeProvider } from "./components/ThemeProvider";
 
 const AppLayout = () => {
   const location = useLocation();
-  const isAuthPage = location.pathname === "/" || location.pathname === "/register";
+  const isAuthPage = ["/", "/register", "/forgot-password", "/reset-password"].includes(location.pathname);
   
   // To react to login changes in localStorage across routes
   const [isStudent, setIsStudent] = useState(false);
@@ -47,6 +49,8 @@ const AppLayout = () => {
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/index" element={<Index />} />
           <Route path="/rooms" element={<Rooms />} />
           <Route path="/schedule" element={<Schedule />} />

@@ -19,14 +19,24 @@ const History = () => {
   const [availableTutorings, setAvailableTutorings] = useState<any[]>([]);
   const [allRooms, setAllRooms]                     = useState<any[]>([]);
   const [loading, setLoading]                       = useState(true);
+  const [ratedIds, setRatedIds]                     = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const loadAll = async () => {
-      await Promise.all([fetchSessions(), fetchTutorings(), fetchRooms()]);
+      await Promise.all([fetchSessions(), fetchTutorings(), fetchRooms(), fetchMyRatings()]);
       setLoading(false);
     };
     loadAll();
   }, []);
+
+  const fetchMyRatings = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await fetch("/auth/student/my-ratings", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setRatedIds(new Set(await res.json()));
+    } catch {}
+  };
 
   const fetchSessions = async () => {
     try {
@@ -214,7 +224,7 @@ const History = () => {
                     <span className="h-2 w-2 rounded-full bg-muted-foreground/40" /> Finalizadas ({past.length})
                   </h3>
                   <div className="space-y-2">
-                    {past.map(t => <SessionRow key={t.id} session={t} isPastSession={true} onCancel={handleCancel} />)}
+                    {past.map(t => <SessionRow key={t.id} session={t} isPastSession={true} onCancel={handleCancel} isRated={ratedIds.has(t.id)} onRated={() => fetchMyRatings()} />)}
                   </div>
                 </div>
               )}
@@ -261,38 +271,120 @@ const History = () => {
 };
 
 // Subcomponente fila de sesión
-const SessionRow = ({ session: t, isPastSession, onCancel }: { session: any; isPastSession: boolean; onCancel: (id: number) => void }) => {
+const SessionRow = ({
+  session: t, isPastSession, onCancel, isRated = false, onRated,
+}: {
+  session: any; isPastSession: boolean; onCancel: (id: number) => void;
+  isRated?: boolean; onRated?: () => void;
+}) => {
+  const { toast } = useToast();
   const dt      = new Date(t.date_time);
   const dateStr = dt.toLocaleDateString("es-CO", { weekday: "short", day: "numeric", month: "short" });
   const timeStr = dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  const [hovered, setHovered]   = useState(0);
+  const [selected, setSelected] = useState(0);
+  const [comment, setComment]   = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+
+  const submitRating = async () => {
+    if (!selected) return;
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/auth/sessions/${t.id}/rate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ stars: selected, comment }),
+      });
+      if (res.ok) {
+        toast({ title: "¡Gracias por tu valoración!" });
+        setShowForm(false);
+        onRated?.();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ variant: "destructive", title: "Error", description: data.detail });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Error de conexión" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <div className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border p-3.5 transition-all",
-      isPastSession ? "border-border/40 bg-muted/20 opacity-70" : "border-[#8DC63F]/30 bg-[#8DC63F]/4 hover:border-[#8DC63F]/50 hover:shadow-sm")}>
-      <div className="flex items-start gap-3">
-        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
-          isPastSession ? "bg-muted" : "bg-[#00AEEF]/10")}>
-          <Calendar size={18} className={isPastSession ? "text-muted-foreground" : "text-[#0090C5]"} />
+    <div className={cn("rounded-xl border p-3.5 transition-all",
+      isPastSession ? "border-border/40 bg-muted/20" : "border-[#8DC63F]/30 bg-[#8DC63F]/4 hover:border-[#8DC63F]/50 hover:shadow-sm")}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
+            isPastSession ? "bg-muted" : "bg-[#00AEEF]/10")}>
+            <Calendar size={18} className={isPastSession ? "text-muted-foreground" : "text-[#0090C5]"} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-semibold text-sm text-foreground">{t.subject}</h3>
+              {isPastSession
+                ? <Badge variant="secondary" className="text-[9px] uppercase">Finalizada</Badge>
+                : <Badge className="text-[9px] uppercase bg-[#8DC63F]/15 text-[#578426] border border-[#8DC63F]/30">Próxima</Badge>}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1 text-[#578426] font-medium"><User size={11} /> {t.tutor_name}</span>
+              <span className="flex items-center gap-1"><MapPin size={11} /> {t.room || "Aula por confirmar"}</span>
+              <span className="flex items-center gap-1"><Calendar size={11} /> {dateStr}</span>
+              <span className="flex items-center gap-1 font-semibold text-foreground"><Clock size={11} /> {timeStr}</span>
+            </div>
+          </div>
         </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-semibold text-sm text-foreground">{t.subject}</h3>
-            {isPastSession
-              ? <Badge variant="secondary" className="text-[9px] uppercase">Finalizada</Badge>
-              : <Badge className="text-[9px] uppercase bg-[#8DC63F]/15 text-[#578426] border border-[#8DC63F]/30">Próxima</Badge>}
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1 text-[#578426] font-medium"><User size={11} /> {t.tutor_name}</span>
-            <span className="flex items-center gap-1"><MapPin size={11} /> {t.room || "Aula por confirmar"}</span>
-            <span className="flex items-center gap-1"><Calendar size={11} /> {dateStr}</span>
-            <span className="flex items-center gap-1 font-semibold text-foreground"><Clock size={11} /> {timeStr}</span>
-          </div>
+        <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+          {isPastSession && (
+            isRated ? (
+              <Badge variant="outline" className="gap-1 text-[11px] bg-amber-50 text-amber-700 border-amber-200">
+                <Star size={10} className="fill-amber-400 text-amber-400" /> Valorada
+              </Badge>
+            ) : (
+              <Button variant="ghost" size="sm"
+                className="gap-1.5 text-xs text-amber-600 hover:text-amber-800 hover:bg-amber-50"
+                onClick={() => setShowForm(v => !v)}>
+                <Star size={13} /> Valorar
+              </Button>
+            )
+          )}
+          {!isPastSession && (
+            <Button variant="ghost" size="sm" onClick={() => onCancel(t.id)}
+              className="gap-1.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-50">
+              <XCircle size={13} /> Cancelar
+            </Button>
+          )}
         </div>
       </div>
-      {!isPastSession && (
-        <Button variant="ghost" size="sm" onClick={() => onCancel(t.id)}
-          className="shrink-0 gap-1.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 self-start sm:self-center">
-          <XCircle size={13} /> Cancelar
-        </Button>
+
+      {showForm && !isRated && (
+        <div className="mt-3 pt-3 border-t border-border/40">
+          <p className="text-xs font-medium text-foreground mb-2">¿Cómo fue la tutoría?</p>
+          <div className="flex gap-1 mb-2">
+            {[1,2,3,4,5].map(n => (
+              <button key={n} type="button"
+                onMouseEnter={() => setHovered(n)} onMouseLeave={() => setHovered(0)}
+                onClick={() => setSelected(n)}
+                className="p-0.5 focus:outline-none">
+                <Star size={22} className={cn("transition-colors",
+                  n <= (hovered || selected) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40")} />
+              </button>
+            ))}
+          </div>
+          <input
+            type="text" placeholder="Comentario opcional…" value={comment}
+            onChange={e => setComment(e.target.value)}
+            className="w-full text-xs border border-border/60 rounded-lg px-3 py-1.5 mb-2 bg-background focus:outline-none focus:ring-1 focus:ring-[#00AEEF]"
+          />
+          <Button size="sm" disabled={!selected || submitting}
+            className="bg-[#00AEEF] hover:bg-[#0090C5] text-white text-xs h-7 px-3"
+            onClick={submitRating}>
+            {submitting ? <Loader2 size={12} className="animate-spin" /> : "Enviar valoración"}
+          </Button>
+        </div>
       )}
     </div>
   );

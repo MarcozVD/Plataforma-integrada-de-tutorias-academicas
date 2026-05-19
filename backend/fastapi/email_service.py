@@ -187,6 +187,37 @@ def email_reminder(
     send_email(to, f"Recordatorio: tutoría de {subject} en 1 hora", _render(content))
 
 
+def email_password_reset(to: str, full_name: str, reset_url: str) -> None:
+    content = (
+        _h2("Recuperar contraseña") +
+        _p(f"Hola <strong>{full_name}</strong>, recibimos una solicitud para restablecer tu contraseña.") +
+        _p("Haz clic en el botón de abajo para crear una nueva contraseña. El enlace es válido por <strong>30 minutos</strong>.") +
+        _BTN.format(url=reset_url, label="Restablecer contraseña") +
+        _p("Si no solicitaste este cambio, puedes ignorar este correo.")
+    )
+    send_email(to, "Restablecer contraseña - PITA UNAB", _render(content))
+
+
+def email_waitlist_spot_available(
+    to: str,
+    student_name: str,
+    subject: str,
+    date_str: str,
+    time_str: str,
+) -> None:
+    content = (
+        _h2("¡Hay un cupo disponible!") +
+        _p(f"Hola <strong>{student_name}</strong>, se liberó un cupo en la tutoría en la que estabas en lista de espera:") +
+        _info_table(
+            _info_row("📚 Materia", subject),
+            _info_row("📅 Fecha",   date_str),
+            _info_row("🕐 Hora",    time_str),
+        ) +
+        _p("Ingresa a la plataforma para inscribirte antes de que se llene nuevamente.")
+    )
+    send_email(to, f"Cupo disponible: {subject}", _render(content))
+
+
 def email_session_cancelled_by_tutor(
     to: str,
     student_name: str,
