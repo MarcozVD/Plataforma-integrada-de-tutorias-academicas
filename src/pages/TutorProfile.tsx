@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { GraduationCap, BookOpen, Clock, Plus, Save, Loader2, Check, X, User, CheckCircle2, AlertTriangle } from "lucide-react";
+import { GraduationCap, BookOpen, Clock, Plus, Save, Loader2, Check, X, User, CheckCircle2, AlertTriangle, Star } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,7 @@ const TutorProfile = () => {
   const [newSubject, setNewSubject]             = useState("");
   const [customSubject, setCustomSubject]       = useState("");
   const [tutoringPreferences, setTutoringPreferences] = useState({ morning: false, afternoon: false, evening: false });
+  const [ratings, setRatings] = useState<{ average: number; count: number; reviews: any[] }>({ average: 0, count: 0, reviews: [] });
 
   useEffect(() => { fetchUserData(); }, []);
 
@@ -57,9 +58,17 @@ const TutorProfile = () => {
       setUserData(data);
       setTutoringSubjects(data.interest_subjects || []);
       setTutoringPreferences(data.tutoring_preferences || { morning: false, afternoon: false, evening: false });
+      fetchRatings(data.id);
     } catch {
       setError("Error al cargar datos del servidor");
     } finally { setLoading(false); }
+  };
+
+  const fetchRatings = async (tutorId: number) => {
+    try {
+      const res = await fetch(`/auth/tutor/${tutorId}/ratings`);
+      if (res.ok) setRatings(await res.json());
+    } catch {}
   };
 
   // Lógica original del compañero: guardar materias y preferencias
@@ -219,8 +228,8 @@ const TutorProfile = () => {
           )}
         </div>
 
-        {/* Columna derecha: materias que dicta */}
-        <div>
+        {/* Columna derecha: materias que dicta + valoraciones */}
+        <div className="space-y-5">
           <Card className="border border-border/60 shadow-sm">
             <CardHeader className="pb-4" style={{ background: "linear-gradient(135deg, #00AEEF 0%, #0090C5 60%, #6B2D8B 100%)" }}>
               <CardTitle className="text-base flex items-center gap-2 text-white">
@@ -279,6 +288,57 @@ const TutorProfile = () => {
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Valoraciones */}
+          <Card className="border border-border/60 shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/40">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Star size={16} className="text-amber-400 fill-amber-400" /> Valoraciones de estudiantes
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {ratings.count === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">Aún no tienes valoraciones</p>
+              ) : (
+                <div className="space-y-4">
+                  {/* Resumen */}
+                  <div className="flex items-center gap-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 p-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-amber-600">{ratings.average.toFixed(1)}</p>
+                      <div className="flex gap-0.5 mt-1">
+                        {[1,2,3,4,5].map(n => (
+                          <Star key={n} size={12} className={n <= Math.round(ratings.average) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"} />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      <p><span className="font-semibold text-foreground">{ratings.count}</span> valoración{ratings.count !== 1 && "es"}</p>
+                    </div>
+                  </div>
+
+                  {/* Lista de reseñas */}
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                    {ratings.reviews.map((r: any, i: number) => (
+                      <div key={i} className="rounded-lg border border-border/40 bg-muted/20 p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex gap-0.5">
+                            {[1,2,3,4,5].map(n => (
+                              <Star key={n} size={11} className={n <= r.stars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"} />
+                            ))}
+                          </div>
+                          <span className="text-[10px] text-muted-foreground">{r.date}</span>
+                        </div>
+                        <p className="text-xs font-medium text-foreground flex items-center gap-1">
+                          <User size={10} className="text-muted-foreground" /> {r.student_name}
+                        </p>
+                        {r.comment && <p className="text-xs text-muted-foreground mt-1 italic">"{r.comment}"</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
