@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const Header = () => {
@@ -25,7 +24,7 @@ const Header = () => {
     setUserType(storedType);
     setFullName(storedName);
 
-    // Cargar conteo de notificaciones (solo estudiantes)
+    // Cargar conteo de notificaciones (solo estudiantes) + polling cada 60s
     if (storedType === "student") {
       const fetchNotifs = async () => {
         try {
@@ -35,7 +34,7 @@ const Header = () => {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (res.ok) {
-            const data = await res.json();
+            const data    = await res.json();
             const saved   = localStorage.getItem("pita_read_notifs");
             const readIds = saved ? JSON.parse(saved) : [];
             setUnreadCount(data.filter((n: any) => !readIds.includes(n.id)).length);
@@ -43,6 +42,8 @@ const Header = () => {
         } catch {}
       };
       fetchNotifs();
+      const interval = setInterval(fetchNotifs, 60_000);
+      return () => clearInterval(interval);
     }
   }, [location.pathname]);
 

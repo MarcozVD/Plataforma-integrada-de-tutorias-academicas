@@ -95,6 +95,42 @@ class TutoringEnrollment(Base):
     )
 
 
+class TutorRating(Base):
+    __tablename__ = "tutor_ratings"
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    tutor_id   = Column(Integer, ForeignKey("users.id"), nullable=False)
+    session_id = Column(Integer, ForeignKey("tutoring_sessions.id"), nullable=False)
+    stars      = Column(Integer, nullable=False)  # 1–5
+    comment    = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    student = relationship("User", foreign_keys=[student_id])
+    tutor   = relationship("User", foreign_keys=[tutor_id])
+    session = relationship("TutoringSession")
+
+    __table_args__ = (
+        UniqueConstraint('student_id', 'session_id', name='unique_student_session_rating'),
+    )
+
+
+class WaitlistEntry(Base):
+    __tablename__ = "waitlist_entries"
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    session_id = Column(Integer, ForeignKey("tutoring_sessions.id"), nullable=False)
+    position = Column(Integer, nullable=False)
+    notified = Column(Boolean, default=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+    student = relationship("User")
+    session = relationship("TutoringSession")
+
+    __table_args__ = (
+        UniqueConstraint('student_id', 'session_id', name='unique_student_session_waitlist'),
+    )
+
+
 class Room(Base):
     __tablename__ = "rooms"
     id = Column(Integer, primary_key=True, index=True)
@@ -108,6 +144,15 @@ class Room(Base):
     created_at = Column(DateTime, server_default=func.now())
 
     availabilities = relationship("RoomAvailability", back_populates="room", cascade="all, delete-orphan")
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+    id         = Column(Integer, primary_key=True, index=True)
+    user_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
+    token      = Column(String(64), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used       = Column(Boolean, default=False)
 
 
 class RoomAvailability(Base):
