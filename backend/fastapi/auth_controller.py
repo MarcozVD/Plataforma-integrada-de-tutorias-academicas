@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
-from sqlalchemy import or_, func
-from fastapi.exceptions import RequestValidationError
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header
+from sqlalchemy import func
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
-from sqlalchemy.orm import Session
-from db import SessionLocal, init_db
+from sqlalchemy.orm import Session, joinedload
+from db import SessionLocal
 from models import User, InterestSubject, TutoringPreference, UserDisability, TutoringSession, TutoringEnrollment, Room, RoomAvailability
 import bcrypt
 import traceback
@@ -14,6 +13,12 @@ from jose import jwt
 from dotenv import load_dotenv
 from typing import Literal
 from datetime import datetime, timedelta
+from email_service import (
+    email_welcome,
+    email_enrollment_confirmation,
+    email_enrollment_cancelled,
+    email_session_cancelled_by_tutor,
+)
 
 load_dotenv()
 SECRET_KEY = os.getenv("XOsFw_ir9cwCC-liLKURVCFUPPKc7BOYzytN-CvurYA", "please-change-me")
@@ -114,9 +119,9 @@ class RoomIn(BaseModel):
     name: str
     building: str
     capacity: int = 30
-    accessibility_wheelchair: bool = False
-    accessibility_visual: bool = False
-    accessibility_hearing: bool = False
+    has_wheelchair_access: bool = False
+    has_visual_support: bool = False
+    has_hearing_support: bool = False
     availabilities: list[RoomAvailabilityIn] | None = None
 
 
@@ -142,15 +147,30 @@ class UpdateDisabilityIn(BaseModel):
 
 class CreateTutoringSessionIn(BaseModel):
     subject: str
-    date_time: str # ISO string
+    date_time: str  # ISO string
     duration: int = 60
     spots: int = 5
     room: str | None = None
     accessibility_type: str | None = None
+    recurrence_weeks: int = 0  # 0 = no recurrence, N = repeat N additional weeks
 
 
-def _save_user(payload: _BaseRegister, user_type: str, db: Session) -> dict:
-    """Shared logic: check duplicates, create user, return dict. Caller adds disability row."""
+def _commit_user(user, db: Session, role: str) -> dict:
+    try:
+        db.commit()
+        db.refresh(user)
+        print(f"[auth] Created {role} id={user.id} university_id={user.university_id}")
+        return {"id": user.id, "university_id": user.university_id, "email": user.email,
+                "full_name": user.full_name, "user_type": user.user_type}
+    except Exception as e:
+        db.rollback()
+        tb = traceback.format_exc()
+        print(f"[auth] ERROR creating {role}:", e)
+        return JSONResponse(status_code=500, content={"error": str(e), "trace": tb.splitlines()[-3:]})
+
+
+def _save_user(payload: _BaseRegister, user_type: str, db: Session):
+    """Adds user to session after checking duplicates. Caller adds disability row then calls _commit_user."""
     print(f"[auth] Register attempt: university_id={payload.university_id}, email={payload.email}")
 
     if db.query(User).filter(User.university_id == payload.university_id).first():
@@ -173,7 +193,7 @@ def _save_user(payload: _BaseRegister, user_type: str, db: Session) -> dict:
 
 
 @router.post("/register/student", response_model=dict, tags=["Autenticación"])
-def register_student(payload: StudentRegisterIn, db: Session = Depends(get_db)):
+def register_student(payload: StudentRegisterIn, bg: BackgroundTasks, db: Session = Depends(get_db)):
     """Registro de estudiante. Campo disability_type = discapacidad que el estudiante tiene."""
     user = _save_user(payload, "student", db)
 
@@ -183,22 +203,14 @@ def register_student(payload: StudentRegisterIn, db: Session = Depends(get_db)):
             disability_type=payload.disability_type,
             disability_description=payload.disability_description,
         ))
-
-    try:
-        db.commit()
-        db.refresh(user)
-        print(f"[auth] Created student id={user.id} university_id={user.university_id}")
-        return {"id": user.id, "university_id": user.university_id, "email": user.email,
-                "full_name": user.full_name, "user_type": user.user_type}
-    except Exception as e:
-        db.rollback()
-        tb = traceback.format_exc()
-        print("[auth] ERROR creating student:", e)
-        return JSONResponse(status_code=500, content={"error": str(e), "trace": tb.splitlines()[-3:]})
+    result = _commit_user(user, db, "student")
+    if isinstance(result, dict):
+        bg.add_task(email_welcome, payload.email, payload.full_name, "student")
+    return result
 
 
 @router.post("/register/tutor", response_model=dict, tags=["Autenticación"])
-def register_tutor(payload: TutorRegisterIn, db: Session = Depends(get_db)):
+def register_tutor(payload: TutorRegisterIn, bg: BackgroundTasks, db: Session = Depends(get_db)):
     """Registro de tutor. Campo disability_support_type = discapacidad que el tutor puede atender."""
     user = _save_user(payload, "tutor", db)
 
@@ -208,18 +220,10 @@ def register_tutor(payload: TutorRegisterIn, db: Session = Depends(get_db)):
             disability_type=payload.disability_support_type,
             disability_description=payload.disability_support_description,
         ))
-
-    try:
-        db.commit()
-        db.refresh(user)
-        print(f"[auth] Created tutor id={user.id} university_id={user.university_id}")
-        return {"id": user.id, "university_id": user.university_id, "email": user.email,
-                "full_name": user.full_name, "user_type": user.user_type}
-    except Exception as e:
-        db.rollback()
-        tb = traceback.format_exc()
-        print("[auth] ERROR creating tutor:", e)
-        return JSONResponse(status_code=500, content={"error": str(e), "trace": tb.splitlines()[-3:]})
+    result = _commit_user(user, db, "tutor")
+    if isinstance(result, dict):
+        bg.add_task(email_welcome, payload.email, payload.full_name, "tutor")
+    return result
 
 
 class LoginIn(BaseModel):
@@ -475,21 +479,25 @@ def create_tutoring_session(
         except:
             raise HTTPException(status_code=400, detail="Formato de fecha inválido")
 
-        session = TutoringSession(
-            tutor_id=user.id,
-            subject=payload.subject,
-            date_time=dt,
-            duration=payload.duration,
-            spots=payload.spots,
-            spots_available=payload.spots,
-            room=payload.room,
-            accessibility_type=payload.accessibility_type
-        )
-        db.add(session)
+        weeks = max(0, min(payload.recurrence_weeks, 51))  # cap at 1 year
+        created_ids = []
+        for w in range(weeks + 1):
+            session = TutoringSession(
+                tutor_id=user.id,
+                subject=payload.subject,
+                date_time=dt + timedelta(weeks=w),
+                duration=payload.duration,
+                spots=payload.spots,
+                spots_available=payload.spots,
+                room=payload.room,
+                accessibility_type=payload.accessibility_type,
+            )
+            db.add(session)
+            db.flush()
+            created_ids.append(session.id)
         db.commit()
-        db.refresh(session)
-        
-        return {"success": True, "session_id": session.id}
+
+        return {"success": True, "session_id": created_ids[0], "created": len(created_ids)}
     except Exception as e:
         db.rollback()
         print("[auth] ERROR creating session:", e)
@@ -591,9 +599,10 @@ def get_all_sessions(
                 "spots": s.spots,
                 "spots_available": s.spots_available,
                 "room": s.room,
-                "tutor_name": tutor.full_name if tutor else "Tutor Desconocido"
+                "tutor_name": tutor.full_name if tutor else "Tutor Desconocido",
+                "accessibility_type": s.accessibility_type
             })
-        
+
         return result
     except Exception as e:
         print("[auth] ERROR getting all sessions:", e)
@@ -601,42 +610,61 @@ def get_all_sessions(
 @router.post("/sessions/{session_id}/enroll", tags=["Tutorías"])
 def enroll_session(
     session_id: int,
+    bg: BackgroundTasks,
     authorization: str = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
 ):
     """Inscribe a un estudiante en una tutoría"""
     if not authorization:
         raise HTTPException(status_code=401, detail="No autorizado")
-    
+
     try:
         token = authorization.replace("Bearer ", "")
         payload_jwt = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload_jwt.get("sub"))
-        
-        # 1. Verificar si la sesión existe
-        tutoring_session = db.query(TutoringSession).filter(TutoringSession.id == session_id).first()
+
+        # Lock the session row to prevent concurrent overbooking
+        tutoring_session = (
+            db.query(TutoringSession)
+            .filter(TutoringSession.id == session_id)
+            .with_for_update()
+            .first()
+        )
         if not tutoring_session:
             raise HTTPException(status_code=404, detail="Tutoría no encontrada")
-        
-        # 2. Verificar si ya está inscrito
+
         existing = db.query(TutoringEnrollment).filter(
             TutoringEnrollment.student_id == user_id,
             TutoringEnrollment.session_id == session_id
         ).first()
         if existing:
             raise HTTPException(status_code=400, detail="Ya estás inscrito en esta tutoría")
-            
-        # 3. Verificar cupos
+
         if tutoring_session.spots_available <= 0:
             raise HTTPException(status_code=400, detail="No hay cupos disponibles")
-            
-        # 4. Inscribir y restar cupo
+
+        student = db.query(User).filter(User.id == user_id).first()
+        tutor   = db.query(User).filter(User.id == tutoring_session.tutor_id).first()
+
         enrollment = TutoringEnrollment(student_id=user_id, session_id=session_id)
         tutoring_session.spots_available -= 1
-        
         db.add(enrollment)
         db.commit()
-        
+
+        if student:
+            dt = tutoring_session.date_time
+            bg.add_task(
+                email_enrollment_confirmation,
+                student.email,
+                student.full_name,
+                tutoring_session.subject,
+                tutor.full_name if tutor else "Tutor",
+                dt.strftime("%d/%m/%Y"),
+                dt.strftime("%H:%M"),
+                tutoring_session.room,
+                tutoring_session.duration,
+            )
+
         return {"success": True, "message": "Inscripción exitosa"}
     except HTTPException:
         raise
@@ -660,7 +688,12 @@ def get_enrolled_sessions(
         payload_jwt = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload_jwt.get("sub"))
         
-        enrollments = db.query(TutoringEnrollment).filter(TutoringEnrollment.student_id == user_id).all()
+        enrollments = (
+            db.query(TutoringEnrollment)
+            .filter(TutoringEnrollment.student_id == user_id)
+            .options(joinedload(TutoringEnrollment.session).joinedload(TutoringSession.tutor))
+            .all()
+        )
 
         now = datetime.now()
         result = []
@@ -668,18 +701,15 @@ def get_enrolled_sessions(
             s = e.session
             if not s:
                 continue
-            # Exclude sessions that have already finished
-            session_end = s.date_time + timedelta(minutes=s.duration)
-            if session_end < now:
+            if s.date_time + timedelta(minutes=s.duration) < now:
                 continue
-            tutor = db.query(User).filter(User.id == s.tutor_id).first()
             result.append({
                 "id": s.id,
                 "subject": s.subject,
                 "date_time": s.date_time.isoformat(),
                 "duration": s.duration,
                 "room": s.room,
-                "tutor_name": tutor.full_name if tutor else "Tutor Desconocido"
+                "tutor_name": s.tutor.full_name if s.tutor else "Tutor Desconocido",
             })
 
         return result
@@ -689,36 +719,45 @@ def get_enrolled_sessions(
 @router.delete("/sessions/{session_id}/enroll", tags=["Tutorías"])
 def cancel_enrollment(
     session_id: int,
+    bg: BackgroundTasks,
     authorization: str = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
 ):
     """Cancela la inscripción de un estudiante en una tutoría"""
     if not authorization:
         raise HTTPException(status_code=401, detail="No autorizado")
-    
+
     try:
         token = authorization.replace("Bearer ", "")
         payload_jwt = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload_jwt.get("sub"))
-        
-        # 1. Buscar la inscripción
+
         enrollment = db.query(TutoringEnrollment).filter(
             TutoringEnrollment.student_id == user_id,
             TutoringEnrollment.session_id == session_id
         ).first()
-        
         if not enrollment:
             raise HTTPException(status_code=404, detail="Inscripción no encontrada")
-            
-        # 2. Restaurar cupo
+
         tutoring_session = db.query(TutoringSession).filter(TutoringSession.id == session_id).first()
+        student = db.query(User).filter(User.id == user_id).first()
+
         if tutoring_session:
             tutoring_session.spots_available += 1
-            
-        # 3. Eliminar inscripción
         db.delete(enrollment)
         db.commit()
-        
+
+        if student and tutoring_session:
+            dt = tutoring_session.date_time
+            bg.add_task(
+                email_enrollment_cancelled,
+                student.email,
+                student.full_name,
+                tutoring_session.subject,
+                dt.strftime("%d/%m/%Y"),
+                dt.strftime("%H:%M"),
+            )
+
         return {"success": True, "message": "Inscripción cancelada"}
     except HTTPException:
         raise
@@ -787,9 +826,9 @@ def get_public_rooms(db: Session = Depends(get_db)):
             "building": r.building,
             "capacity": r.capacity,
             "available": r.available,
-            "accessibility_wheelchair": r.accessibility_wheelchair,
-            "accessibility_visual": r.accessibility_visual,
-            "accessibility_hearing": r.accessibility_hearing,
+            "has_wheelchair_access": r.accessibility_wheelchair,
+            "has_visual_support": r.accessibility_visual,
+            "has_hearing_support": r.accessibility_hearing,
             "availabilities": [
                 {
                     "day": av.day, 
@@ -927,12 +966,26 @@ def get_all_sessions_admin(db: Session = Depends(get_db)):
     } for s in sessions]
 
 @router.delete("/admin/sessions/{session_id}", tags=["Administración"])
-def delete_session(session_id: int, db: Session = Depends(get_db)):
+def delete_session(session_id: int, bg: BackgroundTasks, db: Session = Depends(get_db)):
     session = db.query(TutoringSession).filter(TutoringSession.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
+
+    # Collect enrolled students before deletion for notification
+    enrollments = db.query(TutoringEnrollment).filter(TutoringEnrollment.session_id == session_id).all()
+    student_ids = [e.student_id for e in enrollments]
+    students = db.query(User).filter(User.id.in_(student_ids)).all() if student_ids else []
+    dt = session.date_time
+    subject_name = session.subject
+    date_str = dt.strftime("%d/%m/%Y")
+    time_str  = dt.strftime("%H:%M")
+
     db.delete(session)
     db.commit()
+
+    for s in students:
+        bg.add_task(email_session_cancelled_by_tutor, s.email, s.full_name, subject_name, date_str, time_str)
+
     return {"message": "Sesión eliminada"}
 
 @router.get("/admin/rooms", tags=["Administración"])
@@ -945,9 +998,9 @@ def get_rooms_admin(db: Session = Depends(get_db)):
             "building": r.building,
             "capacity": r.capacity,
             "available": r.available,
-            "accessibility_wheelchair": r.accessibility_wheelchair,
-            "accessibility_visual": r.accessibility_visual,
-            "accessibility_hearing": r.accessibility_hearing,
+            "has_wheelchair_access": r.accessibility_wheelchair,
+            "has_visual_support": r.accessibility_visual,
+            "has_hearing_support": r.accessibility_hearing,
             "availabilities": [
                 {
                     "day": av.day, 
@@ -970,9 +1023,9 @@ def create_room(payload: RoomIn, db: Session = Depends(get_db)):
         name=full_name_formatted,
         building=payload.building,
         capacity=payload.capacity,
-        accessibility_wheelchair=payload.accessibility_wheelchair,
-        accessibility_visual=payload.accessibility_visual,
-        accessibility_hearing=payload.accessibility_hearing
+        accessibility_wheelchair=payload.has_wheelchair_access,
+        accessibility_visual=payload.has_visual_support,
+        accessibility_hearing=payload.has_hearing_support
     )
     db.add(room)
     try:

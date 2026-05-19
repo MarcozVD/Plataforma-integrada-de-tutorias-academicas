@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  Bell, Menu, X, GraduationCap, User, LogOut,
-  LayoutDashboard, DoorOpen, BookOpen, History, Shield,
+  Bell, Menu, X, GraduationCap, LogOut,
+  LayoutDashboard, DoorOpen, BookOpen, History, Shield, Moon, Sun,
 } from "lucide-react";
+import { useTheme } from "./ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,7 @@ const Header = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location  = useLocation();
   const navigate  = useNavigate();
+  const { theme, toggleTheme } = useTheme();
 
   const [userType, setUserType]     = useState<string>("");
   const [fullName, setFullName]     = useState<string>("");
@@ -157,6 +159,16 @@ const Header = () => {
                 {fullName.split(" ")[0]}
               </span>
             )}
+
+            {/* Dark mode toggle */}
+            <Button
+              variant="ghost" size="icon"
+              className="h-9 w-9 text-white hover:bg-white/10 rounded-lg"
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            >
+              {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            </Button>
 
             {/* Logout */}
             <Button

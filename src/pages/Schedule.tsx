@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Clock, Search, Filter, X, CalendarDays, Plus, Trash2, AlertTriangle, CheckCircle2, BookOpen } from "lucide-react";
+import { Clock, Search, Filter, X, CalendarDays, Plus, Trash2, AlertTriangle, CheckCircle2, BookOpen, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ interface ScheduleBlock {
   endTime: string;
   subject: string;
   isTutoring?: boolean;
-  isPast?: boolean;
+  isInProgress?: boolean;
   session_id?: number;
 }
 
@@ -24,6 +24,54 @@ const ALL_DAYS    = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sáb
 const DAY_INDEX   = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const HOURS_RANGE = Array.from({ length: 15 }, (_, i) => `${6 + i}:00`);
 const timeToMin   = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+
+const DAY_TO_ICS: Record<string, string> = { Lunes:"MO", Martes:"TU", "Miércoles":"WE", Jueves:"TH", Viernes:"FR", Sábado:"SA" };
+const DAY_TO_JS:  Record<string, number> = { Lunes:1,    Martes:2,    "Miércoles":3,    Jueves:4,    Viernes:5,    Sábado:6    };
+
+const icsLocal = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2,"0");
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+};
+
+function nextWeekday(dayName: string): Date {
+  const target  = DAY_TO_JS[dayName] ?? 1;
+  const today   = new Date();
+  const diff    = ((target - today.getDay()) + 7) % 7 || 7;
+  const result  = new Date(today);
+  result.setDate(today.getDate() + diff);
+  return result;
+}
+
+function buildIcs(blocks: ScheduleBlock[], enrolled: any[]): string {
+  const lines: string[] = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//PITA UNAB//Horario//ES","CALSCALE:GREGORIAN"];
+
+  for (const b of blocks) {
+    if (b.isTutoring) continue; // handled from enrolled below
+    const start = nextWeekday(b.day);
+    const [sh, sm] = b.startTime.split(":").map(Number);
+    const [eh, em] = b.endTime.split(":").map(Number);
+    start.setHours(sh, sm, 0, 0);
+    const end = new Date(start); end.setHours(eh, em, 0, 0);
+    lines.push("BEGIN:VEVENT",
+      `DTSTART:${icsLocal(start)}`,`DTEND:${icsLocal(end)}`,
+      `RRULE:FREQ=WEEKLY;BYDAY=${DAY_TO_ICS[b.day]};COUNT=16`,
+      `SUMMARY:${b.subject}`,"END:VEVENT");
+  }
+
+  for (const s of enrolled) {
+    const dt  = new Date(s.date_time);
+    const end = new Date(dt.getTime() + s.duration * 60000);
+    lines.push("BEGIN:VEVENT",
+      `DTSTART:${icsLocal(dt)}`,`DTEND:${icsLocal(end)}`,
+      `SUMMARY:[Tutoría] ${s.subject}`,
+      `DESCRIPTION:Tutor: ${s.tutor_name ?? ""}`,
+      ...(s.room ? [`LOCATION:${s.room}`] : []),
+      "END:VEVENT");
+  }
+
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
 
 const Schedule = () => {
   const [userSchedule, setUserSchedule]         = useState<ScheduleBlock[]>([]);
@@ -64,21 +112,21 @@ const Schedule = () => {
   };
 
   const combinedSchedule = useMemo(() => {
+    const now    = new Date();
     const blocks: ScheduleBlock[] = enrolledSessions.map(s => {
       const dt    = new Date(s.date_time);
       const day   = DAY_INDEX[dt.getDay()];
       const h     = dt.getHours().toString().padStart(2, "0");
       const m     = dt.getMinutes().toString().padStart(2, "0");
       const endDt = new Date(dt.getTime() + s.duration * 60000);
-      const now   = new Date();
       return {
         id: `enroll-${s.id}`, session_id: s.id, day,
         subject: `[TUT] ${s.subject}`,
         startTime: `${h}:${m}`,
         endTime: `${endDt.getHours().toString().padStart(2,"0")}:${endDt.getMinutes().toString().padStart(2,"0")}`,
         isTutoring: true,
-        // isPast is true only while the session is actively happening (started but not ended)
-        isPast: dt < now && endDt > now,
+        // true while the session is in progress (started but not yet ended)
+        isInProgress: dt < now && endDt > now,
       };
     });
     return [...userSchedule, ...blocks];
@@ -128,6 +176,15 @@ const Schedule = () => {
     setUserSchedule(userSchedule.filter(b => b.id !== id));
   };
 
+  const exportIcs = () => {
+    const content = buildIcs(combinedSchedule, enrolledSessions);
+    const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = "horario-pita.ics"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const checkSolapamientos = () => {
     const solapados: string[] = [];
     realAllSessions.forEach(tutoria => {
@@ -150,8 +207,15 @@ const Schedule = () => {
     <main className="container mx-auto px-4 py-8 max-w-7xl animate-fade-in">
 
       <section className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground">Mi horario académico</h1>
-        <p className="text-muted-foreground mt-1">Carga tus clases y verifica qué tutorías no se solapan</p>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Mi horario académico</h1>
+            <p className="text-muted-foreground mt-1">Carga tus clases y verifica qué tutorías no se solapan</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={exportIcs} className="gap-2 shrink-0">
+            <Download size={14} /> Exportar .ics
+          </Button>
+        </div>
         <div className="mt-4 h-1 w-24 rounded-full unab-gradient" />
       </section>
 
@@ -252,24 +316,18 @@ const Schedule = () => {
                         className={cn(
                           "absolute left-0.5 right-0.5 rounded-md px-1.5 py-1 text-[10px] overflow-hidden shadow-sm border flex flex-col justify-between group/block z-10 transition-shadow hover:shadow-md",
                           block.isTutoring ? "bg-[#6B2D8B] text-white border-[#5a2576]" : "bg-[#00AEEF] text-white border-[#0090C5]",
-                          block.isPast && "opacity-50 grayscale"
+                          block.isInProgress && "opacity-50 grayscale"
                         )}
                         style={{ top: `${topPct}%`, height: `${heightPct}%`, minHeight: "32px" }}>
                         <div>
                           <p className="font-semibold leading-tight line-clamp-2">{block.subject}</p>
                           <p className="opacity-80 mt-0.5">{block.startTime}–{block.endTime}</p>
-                          {block.isPast && <span className="text-[8px] bg-white/20 px-1 rounded">En curso</span>}
+                          {block.isInProgress && <span className="text-[8px] bg-white/20 px-1 rounded">En curso</span>}
                         </div>
-                        {!block.isPast && !block.isTutoring && (
+                        {!block.isInProgress && (
                           <button onClick={() => handleRemoveBlock(block.id, block.session_id)}
                             className="hidden group-hover/block:flex items-center gap-0.5 text-white/70 hover:text-white mt-1 transition-colors">
-                            <Trash2 size={9} /> Eliminar
-                          </button>
-                        )}
-                        {!block.isPast && block.isTutoring && (
-                          <button onClick={() => handleRemoveBlock(block.id, block.session_id)}
-                            className="hidden group-hover/block:flex items-center gap-0.5 text-white/70 hover:text-white mt-1 transition-colors">
-                            <Trash2 size={9} /> Cancelar inscripción
+                            <Trash2 size={9} /> {block.isTutoring ? "Cancelar inscripción" : "Eliminar"}
                           </button>
                         )}
                       </div>

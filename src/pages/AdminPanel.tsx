@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import {
   Users, BookOpen, Building2, Trash2, Plus, ShieldCheck, Loader2,
   MapPin, Accessibility, Eye, History as HistoryIcon, User as UserIcon,
-  Calendar, Filter, X, TrendingUp,
+  Calendar, Filter, X, TrendingUp, BarChart2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,7 @@ const AdminPanel = () => {
 
   const [newRoom, setNewRoom] = useState<any>({
     name: "", building: "Bloque A", capacity: 30,
-    accessibility_wheelchair: false, accessibility_visual: false, accessibility_hearing: false,
+    has_wheelchair_access: false, has_visual_support: false, has_hearing_support: false,
     availabilities: [],
   });
   const [tempAvailability, setTempAvailability] = useState({
@@ -53,9 +53,10 @@ const AdminPanel = () => {
   // Lógica original del compañero: navegación por hash
   useEffect(() => {
     const hash = location.hash.replace("#", "");
-    if (hash === "usuarios" || hash === "users")         setActiveTab("users");
-    else if (hash === "tutorias" || hash === "sessions") setActiveTab("sessions");
-    else if (hash === "salones"  || hash === "rooms")    setActiveTab("rooms");
+    if (hash === "usuarios" || hash === "users")             setActiveTab("users");
+    else if (hash === "tutorias" || hash === "sessions")     setActiveTab("sessions");
+    else if (hash === "salones"  || hash === "rooms")        setActiveTab("rooms");
+    else if (hash === "estadisticas" || hash === "stats")    setActiveTab("stats");
     else if (!hash) setActiveTab("users");
   }, [location.hash]);
 
@@ -110,7 +111,7 @@ const AdminPanel = () => {
     });
     if (res.ok) {
       toast({ title: "Salón creado con éxito" });
-      setNewRoom({ name: "", building: "Bloque A", capacity: 30, accessibility_wheelchair: false, accessibility_visual: false, accessibility_hearing: false, availabilities: [] });
+      setNewRoom({ name: "", building: "Bloque A", capacity: 30, has_wheelchair_access: false, has_visual_support: false, has_hearing_support: false, availabilities: [] });
       fetchAllData();
     } else { const d = await res.json(); toast({ variant: "destructive", title: "Error", description: d.detail }); }
   };
@@ -132,7 +133,7 @@ const AdminPanel = () => {
     { label: "Usuarios",  value: users.length,    icon: <Users size={18} />,    bg: "bg-[#00AEEF]/10", color: "text-[#0090C5]" },
     { label: "Tutorías",  value: sessions.length,  icon: <BookOpen size={18} />, bg: "bg-[#8DC63F]/10", color: "text-[#578426]" },
     { label: "Salones",   value: rooms.length,     icon: <Building2 size={18} />,bg: "bg-[#FF9900]/10", color: "text-[#e08800]" },
-    { label: "Inscritos", value: sessions.reduce((a,s)=>a+(s.spots-(s.spots_available??s.spots)),0),
+    { label: "Inscritos", value: sessions.reduce((a,s)=>a+Math.max(0,(s.spots??0)-(s.spots_available??s.spots??0)),0),
       icon: <TrendingUp size={18} />, bg: "bg-[#6B2D8B]/10", color: "text-[#6B2D8B]" },
   ];
 
@@ -177,9 +178,23 @@ const AdminPanel = () => {
       {/* Tabs con hash navigation */}
       <Tabs value={activeTab} onValueChange={(val) => {
         setActiveTab(val);
-        const hashMap: Record<string, string> = { users: "usuarios", sessions: "tutorias", rooms: "salones" };
+        const hashMap: Record<string, string> = { users: "usuarios", sessions: "tutorias", rooms: "salones", stats: "estadisticas" };
         window.history.pushState(null, "", `#${hashMap[val]}`);
       }} className="space-y-5">
+
+        <TabsList className="bg-muted/50 p-1 gap-1 flex-wrap h-auto">
+          {[
+            { val: "users",    label: "Usuarios",      icon: <Users size={14} />      },
+            { val: "sessions", label: "Tutorías",      icon: <BookOpen size={14} />   },
+            { val: "rooms",    label: "Salones",       icon: <Building2 size={14} />  },
+            { val: "stats",    label: "Estadísticas",  icon: <BarChart2 size={14} />  },
+          ].map(({ val, label, icon }) => (
+            <TabsTrigger key={val} value={val}
+              className="gap-1.5 data-[state=active]:bg-[#6B2D8B] data-[state=active]:text-white">
+              {icon} {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
         {/* Usuarios */}
         <TabsContent value="users">
@@ -311,9 +326,9 @@ const AdminPanel = () => {
                     <div className="space-y-2 pt-1">
                       <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Accesibilidad</Label>
                       {[
-                        { key: "accessibility_wheelchair", label: "Silla de ruedas" },
-                        { key: "accessibility_visual",     label: "Apoyo visual"    },
-                        { key: "accessibility_hearing",    label: "Apoyo auditivo"  },
+                        { key: "has_wheelchair_access", label: "Silla de ruedas" },
+                        { key: "has_visual_support",    label: "Apoyo visual"    },
+                        { key: "has_hearing_support",   label: "Apoyo auditivo"  },
                       ].map(({ key, label }) => (
                         <label key={key} className="flex items-center gap-2 cursor-pointer">
                           <Checkbox checked={newRoom[key]} onCheckedChange={c => setNewRoom({ ...newRoom, [key]: !!c })}
@@ -434,9 +449,9 @@ const AdminPanel = () => {
                                     <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-[#8DC63F]/10 text-[#578426] border-[#8DC63F]/25">Cap. {r.capacity}</Badge>
                                   </div>
                                   <div className="flex items-center gap-1">
-                                    {r.accessibility_wheelchair && <span title="Silla de ruedas" className="flex h-5 w-5 items-center justify-center rounded bg-[#00AEEF]/10"><Accessibility size={10} className="text-[#0090C5]" /></span>}
-                                    {r.accessibility_visual     && <span title="Apoyo visual"   className="flex h-5 w-5 items-center justify-center rounded bg-[#8DC63F]/10 text-[#578426] text-[8px] font-bold">V</span>}
-                                    {r.accessibility_hearing    && <span title="Apoyo auditivo" className="flex h-5 w-5 items-center justify-center rounded bg-[#FF9900]/10 text-[#e08800] text-[8px] font-bold">A</span>}
+                                    {r.has_wheelchair_access && <span title="Silla de ruedas" className="flex h-5 w-5 items-center justify-center rounded bg-[#00AEEF]/10"><Accessibility size={10} className="text-[#0090C5]" /></span>}
+                                    {r.has_visual_support    && <span title="Apoyo visual"   className="flex h-5 w-5 items-center justify-center rounded bg-[#8DC63F]/10 text-[#578426] text-[8px] font-bold">V</span>}
+                                    {r.has_hearing_support   && <span title="Apoyo auditivo" className="flex h-5 w-5 items-center justify-center rounded bg-[#FF9900]/10 text-[#e08800] text-[8px] font-bold">A</span>}
                                   </div>
                                   {r.availabilities?.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mt-1">
