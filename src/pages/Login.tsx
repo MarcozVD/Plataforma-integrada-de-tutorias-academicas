@@ -83,19 +83,19 @@ const Login = () => {
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
               )}
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">Número de estudiante</label>
+                <label htmlFor="login-id" className="text-sm font-medium text-foreground">Número de estudiante</label>
                 <div className="relative">
-                  <School className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input type="text" placeholder="U00123456" value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)} className="pl-9" required />
+                  <School className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <Input id="login-id" type="text" placeholder="U00123456" value={studentId}
+                    onChange={(e) => setStudentId(e.target.value)} className="pl-9" required autoComplete="username" />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">Contraseña</label>
+                <label htmlFor="login-password" className="text-sm font-medium text-foreground">Contraseña</label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input type="password" placeholder="••••••••" value={password}
-                    onChange={(e) => setPassword(e.target.value)} className="pl-9" required />
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <Input id="login-password" type="password" placeholder="••••••••" value={password}
+                    onChange={(e) => setPassword(e.target.value)} className="pl-9" required autoComplete="current-password" />
                 </div>
               </div>
               <div className="flex items-center justify-between text-sm">
@@ -108,9 +108,9 @@ const Login = () => {
                   />
                   <span className="text-muted-foreground">Recuérdame</span>
                 </label>
-                <a href="#" className="text-[#00AEEF] hover:text-[#0090C5] font-medium transition-colors">
+                <Link to="/forgot-password" className="text-[#00AEEF] hover:text-[#0090C5] font-medium transition-colors">
                   ¿Olvidaste tu contraseña?
-                </a>
+                </Link>
               </div>
               <Button type="submit" disabled={isLoading}
                 className="w-full text-white font-semibold py-2 mt-2" style={{ backgroundColor: "#00AEEF" }}>

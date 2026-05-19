@@ -9,11 +9,9 @@ interface RoomCardProps {
 }
 
 const RoomCard = ({ room, listView = false }: RoomCardProps) => {
-  // Normalizar campos entre mock y API real (lógica original preservada)
-  const isWebAPI      = room.accessibility_wheelchair !== undefined;
-  const hasWheelchair = isWebAPI ? room.accessibility_wheelchair : room.accessibility?.wheelchair;
-  const hasVisual     = isWebAPI ? room.accessibility_visual     : room.accessibility?.visualSupport;
-  const hasHearing    = isWebAPI ? room.accessibility_hearing    : room.accessibility?.hearingSupport;
+  const hasWheelchair = room.has_wheelchair_access;
+  const hasVisual     = room.has_visual_support;
+  const hasHearing    = room.has_hearing_support;
   const isAvailable   = room.available;
 
   // ── Vista Lista ──────────────────────────────────────────────────────────
@@ -55,7 +53,7 @@ const RoomCard = ({ room, listView = false }: RoomCardProps) => {
 
   // ── Vista Grid ───────────────────────────────────────────────────────────
   return (
-    <Card className={cn(
+    <Card role="article" aria-label={`Salón ${room.name}, ${isAvailable ? "disponible" : "ocupado"}`} className={cn(
       "overflow-hidden transition-all hover:shadow-md group",
       isAvailable ? "border-border/60 hover:border-[#8DC63F]/40" : "border-border/40 bg-muted/20"
     )}>

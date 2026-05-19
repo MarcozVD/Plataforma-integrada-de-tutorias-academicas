@@ -62,7 +62,7 @@ const TutoringCard = ({ tutoring, isEnrolled, onEnrollSuccess }: TutoringProps) 
   };
 
   return (
-    <Card className={cn(
+    <Card role="article" aria-label={`Tutoría de ${tutoring.subject} con ${tutoring.tutor}`} className={cn(
       "overflow-hidden transition-all hover:shadow-md group",
       isEnrolled  ? "border-[#8DC63F]/40 hover:border-[#8DC63F]/60" :
       isFull      ? "border-border/40 bg-muted/10"                   :
@@ -113,7 +113,7 @@ const TutoringCard = ({ tutoring, isEnrolled, onEnrollSuccess }: TutoringProps) 
         </div>
 
         {/* Accesibilidad */}
-        {tutoring.accessibility.length > 0 && tutoring.accessibility[0] !== "Inscrito" && (
+        {!isEnrolled && tutoring.accessibility.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">
             {tutoring.accessibility.map((a) => (
               <Badge key={a} variant="outline"

@@ -27,9 +27,9 @@ const Rooms = () => {
   }, []);
 
   const filtered = useMemo(() => rooms.filter((r) => {
-    const hasWheelchair = r.accessibility_wheelchair !== undefined ? r.accessibility_wheelchair : r.accessibility?.wheelchair;
-    const hasVisual     = r.accessibility_visual     !== undefined ? r.accessibility_visual     : r.accessibility?.visualSupport;
-    const hasHearing    = r.accessibility_hearing    !== undefined ? r.accessibility_hearing    : r.accessibility?.hearingSupport;
+    const hasWheelchair = r.has_wheelchair_access;
+    const hasVisual     = r.has_visual_support;
+    const hasHearing    = r.has_hearing_support;
     const matchSearch    = r.name.toLowerCase().includes(search.toLowerCase()) || r.building.toLowerCase().includes(search.toLowerCase());
     const matchAvailable = !onlyAvailable || r.available;
     const matchAccess    = (!accessFilters.wheelchair || hasWheelchair) && (!accessFilters.visual || hasVisual) && (!accessFilters.hearing || hasHearing);

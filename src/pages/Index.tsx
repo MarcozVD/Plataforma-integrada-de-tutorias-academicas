@@ -77,7 +77,9 @@ const Index = () => {
             time: dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             duration: `${t.duration} min`,
             spotsAvailable: t.spots_available, spots: t.spots,
-            accessibility: t.accessibility_type ? [t.accessibility_type] : ["General"],
+            accessibility: t.accessibility_type
+              ? [{ visual: "Apoyo visual", auditiva: "Apoyo auditivo", motriz: "Silla de ruedas", cognitiva: "Apoyo cognitivo" }[t.accessibility_type] ?? t.accessibility_type]
+              : ["General"],
           };
         }));
       }
@@ -88,21 +90,21 @@ const Index = () => {
     const matchSearch  = t.subject.toLowerCase().includes(search.toLowerCase()) ||
       t.tutor.toLowerCase().includes(search.toLowerCase()) || t.room.toLowerCase().includes(search.toLowerCase());
     const matchSubject = subjectFilter === "all" || t.subject.toLowerCase().includes(subjectFilter.toLowerCase());
-    const matchDate    = !dateFilter || t.date === new Date(dateFilter).toLocaleDateString();
-    const matchTime    = !timeFilter || t.time.includes(timeFilter);
+    const matchDate    = !dateFilter || t.rawDate.toLocaleDateString() === new Date(dateFilter + "T00:00:00").toLocaleDateString();
+    const matchTime    = !timeFilter || t.time.startsWith(timeFilter);
     let matchAccess = true;
-    if (accessFilters.wheelchair && !t.accessibility.includes("Movilidad reducida")) matchAccess = false;
-    if (accessFilters.visual     && !t.accessibility.includes("Visual"))             matchAccess = false;
-    if (accessFilters.hearing    && !t.accessibility.includes("Auditiva"))           matchAccess = false;
+    if (accessFilters.wheelchair && !t.accessibility.includes("Silla de ruedas")) matchAccess = false;
+    if (accessFilters.visual     && !t.accessibility.includes("Apoyo visual"))    matchAccess = false;
+    if (accessFilters.hearing    && !t.accessibility.includes("Apoyo auditivo"))  matchAccess = false;
     return matchSearch && matchSubject && matchDate && matchTime && matchAccess;
   }), [search, subjectFilter, dateFilter, timeFilter, realTutorings, accessFilters]);
 
   const filteredRooms = useMemo(() => rooms.filter((r) => {
     const matchSearch    = r.name.toLowerCase().includes(search.toLowerCase()) || r.building.toLowerCase().includes(search.toLowerCase());
     const matchAvailable = !onlyAvailableRooms || r.available;
-    const matchAccess    = (!accessFilters.wheelchair || r.accessibility?.wheelchair) &&
-      (!accessFilters.visual || r.accessibility?.visualSupport) &&
-      (!accessFilters.hearing || r.accessibility?.hearingSupport);
+    const matchAccess    = (!accessFilters.wheelchair || r.has_wheelchair_access) &&
+      (!accessFilters.visual || r.has_visual_support) &&
+      (!accessFilters.hearing || r.has_hearing_support);
     return matchSearch && matchAvailable && matchAccess;
   }), [search, onlyAvailableRooms, accessFilters, rooms]);
 

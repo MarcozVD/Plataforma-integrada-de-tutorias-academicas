@@ -23,6 +23,7 @@ import { ChatWidget } from "./components/chat/ChatWidget";
 import { useEffect, useState } from "react";
 
 import { TitleBar } from "./components/TitleBar";
+import { ThemeProvider } from "./components/ThemeProvider";
 
 const AppLayout = () => {
   const location = useLocation();
@@ -66,15 +67,17 @@ const AppLayout = () => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <HashRouter>
-        <AppLayout />
-      </HashRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <HashRouter>
+          <AppLayout />
+        </HashRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;

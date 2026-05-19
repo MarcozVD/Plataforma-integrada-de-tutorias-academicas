@@ -35,7 +35,9 @@ const TutorPanel = () => {
 
   const [newSession, setNewSession] = useState({
     subject: "", date: "", time: "", duration: 60, spots: 5, room: "", accessibility_type: "",
+    recurrence_weeks: 0,
   });
+  const [recurring, setRecurring] = useState(false);
 
   // Nombre del tutor desde localStorage
   const fullName  = localStorage.getItem("fullName") || "";
@@ -44,7 +46,8 @@ const TutorPanel = () => {
   useEffect(() => { fetchUserData(); fetchSessions(); }, []);
 
   useEffect(() => {
-    if (!newSession.date || !newSession.time) return;
+    if (!newSession.date || !newSession.time) { setAvailableRooms([]); return; }
+    setSelectedBlock("");
     const load = async () => {
       setFetchingRooms(true);
       try {
@@ -92,8 +95,8 @@ const TutorPanel = () => {
       });
       if (!res.ok) throw new Error();
       await fetchSessions();
-      setNewSession({ subject: "", date: "", time: "", duration: 60, spots: 5, room: "", accessibility_type: "" });
-      setIsVirtual(false); setSelectedBlock("");
+      setNewSession({ subject: "", date: "", time: "", duration: 60, spots: 5, room: "", accessibility_type: "", recurrence_weeks: 0 });
+      setIsVirtual(false); setSelectedBlock(""); setRecurring(false);
       setSuccess(true); setTimeout(() => setSuccess(false), 4000);
     } catch { setError("Error al crear la sesión. Inténtalo de nuevo."); }
     finally { setCreatingSession(false); }
@@ -243,6 +246,7 @@ const TutorPanel = () => {
 
               {!isVirtual ? (
                 <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+                  {availableRooms.length > 0 && (
                   <div className="space-y-1">
                     <Label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide">Filtrar por bloque</Label>
                     <select className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
@@ -251,6 +255,7 @@ const TutorPanel = () => {
                       {BLOCKS.map(b => <option key={b} value={`Bloque ${b}`}>Bloque {b}</option>)}
                     </select>
                   </div>
+                  )}
                   <div className="space-y-1">
                     <Label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide flex items-center gap-1">
                       Salón disponible {fetchingRooms && <Loader2 size={10} className="animate-spin" />}
@@ -285,6 +290,25 @@ const TutorPanel = () => {
                   <option value="Visual">Visual</option>
                   <option value="Cognitiva">Cognitiva</option>
                 </select>
+              </div>
+
+              {/* Recurrencia */}
+              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={recurring}
+                    onChange={e => { setRecurring(e.target.checked); setNewSession(s => ({ ...s, recurrence_weeks: e.target.checked ? 3 : 0 })); }}
+                    className="w-4 h-4 rounded accent-[#00AEEF]" />
+                  <span className="text-sm font-medium">Repetir semanalmente</span>
+                </label>
+                {recurring && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Label className="text-xs text-muted-foreground whitespace-nowrap">Repetir durante</Label>
+                    <Input type="number" min={1} max={51} value={newSession.recurrence_weeks}
+                      onChange={e => setNewSession(s => ({ ...s, recurrence_weeks: parseInt(e.target.value) || 1 }))}
+                      className="text-sm h-8 w-20" />
+                    <span className="text-xs text-muted-foreground">semanas más</span>
+                  </div>
+                )}
               </div>
 
               {error && (
@@ -389,7 +413,8 @@ const TutorPanel = () => {
 
       {/* Modal estudiantes */}
       {selectedSessionStudents !== null && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+        <div role="dialog" aria-modal="true" aria-label="Estudiantes inscritos"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={e => { if (e.target === e.currentTarget) setSelectedSessionStudents(null); }}>
           <Card className="w-full max-w-lg shadow-2xl">
             <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
