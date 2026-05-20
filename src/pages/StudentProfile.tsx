@@ -182,7 +182,7 @@ const StudentProfile = () => {
   );
 
   return (
-    <main className="container mx-auto px-4 py-8 max-w-3xl animate-fade-in">
+    <main className="container mx-auto px-6 py-8 max-w-7xl animate-fade-in">
 
       {/* Header */}
       <section className="mb-6">
@@ -216,149 +216,155 @@ const StudentProfile = () => {
         </div>
       )}
 
-      <div className="space-y-5">
+      <div className="grid lg:grid-cols-2 gap-5 items-start">
 
-        {/* Información académica */}
-        <Card className="border border-border/60 shadow-sm">
-          <CardHeader className="pb-3 border-b border-border/40">
-            <CardTitle className="text-base flex items-center gap-2">
-              <GraduationCap size={16} className="text-[#00AEEF]" /> Información académica
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Nombre completo</Label>
-                <Input defaultValue={userData?.full_name ?? ""} className="text-sm" />
+        {/* Columna izquierda: datos + accesibilidad */}
+        <div className="space-y-5">
+          {/* Información académica */}
+          <Card className="border border-border/60 shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/40">
+              <CardTitle className="text-base flex items-center gap-2">
+                <GraduationCap size={16} className="text-[#00AEEF]" /> Información académica
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Nombre completo</Label>
+                  <Input defaultValue={userData?.full_name ?? ""} className="text-sm" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Correo electrónico</Label>
+                  <Input defaultValue={userData?.email ?? ""} disabled className="text-sm bg-muted/30" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Carrera</Label>
+                  <Input defaultValue={userData?.carrera ?? ""} placeholder="Ej: Ingeniería en Sistemas" className="text-sm" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">ID académico</Label>
+                  <Input defaultValue={userData?.university_id ?? ""} disabled className="text-sm bg-muted/30 font-mono" />
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Correo electrónico</Label>
-                <Input defaultValue={userData?.email ?? ""} disabled className="text-sm bg-muted/30" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Carrera</Label>
-                <Input defaultValue={userData?.carrera ?? ""} placeholder="Ej: Ingeniería en Sistemas" className="text-sm" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">ID académico</Label>
-                <Input defaultValue={userData?.university_id ?? ""} disabled className="text-sm bg-muted/30 font-mono" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Accesibilidad */}
-        <Card className="border border-border/60 shadow-sm">
-          <CardHeader className="pb-3 border-b border-border/40">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Accessibility size={16} className="text-[#FF9900]" /> Información de accesibilidad
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Tipo de discapacidad</Label>
-              <select value={disabilityType} onChange={e => { setDisabilityType(e.target.value); setHasChanges(true); }}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF]/40">
-                <option value="none">Ninguna</option>
-                <option value="visual">Visual</option>
-                <option value="auditiva">Auditiva</option>
-                <option value="motora">Motora</option>
-                <option value="cognitiva">Cognitiva</option>
-                <option value="otra">Otra</option>
-              </select>
-            </div>
-            {disabilityType !== "none" && (
+          {/* Accesibilidad */}
+          <Card className="border border-border/60 shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/40">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Accessibility size={16} className="text-[#FF9900]" /> Información de accesibilidad
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Descripción de necesidades específicas</Label>
-                <textarea value={disabilityDescription} onChange={e => { setDisabilityDescription(e.target.value); setHasChanges(true); }}
-                  rows={3} placeholder="Describe qué adaptaciones necesitas para tus tutorías..."
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF]/40 resize-none" />
+                <Label className="text-xs font-medium">Tipo de discapacidad</Label>
+                <select value={disabilityType} onChange={e => { setDisabilityType(e.target.value); setHasChanges(true); }}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF]/40">
+                  <option value="none">Ninguna</option>
+                  <option value="visual">Visual</option>
+                  <option value="auditiva">Auditiva</option>
+                  <option value="motora">Motora</option>
+                  <option value="cognitiva">Cognitiva</option>
+                  <option value="otra">Otra</option>
+                </select>
               </div>
-            )}
-            <p className="text-[11px] text-muted-foreground">Esta información es confidencial y se usa para asignarte aulas y tutores adecuados.</p>
-          </CardContent>
-        </Card>
-
-        {/* Materias de interés */}
-        <Card className="border border-border/60 shadow-sm">
-          <CardHeader className="pb-3 border-b border-border/40">
-            <CardTitle className="text-base flex items-center gap-2">
-              <BookOpen size={16} className="text-[#8DC63F]" /> Materias de interés
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-4">
-            <p className="text-xs text-muted-foreground">Selecciona las materias en las que necesitas tutorías.</p>
-            <div className="flex flex-wrap gap-1.5 min-h-[32px]">
-              {interestSubjects.length === 0 ? (
-                <span className="text-xs text-muted-foreground italic">No hay materias seleccionadas</span>
-              ) : (
-                interestSubjects.map(s => (
-                  <Badge key={s} variant="outline"
-                    className="gap-1 text-xs py-1 px-2.5 bg-[#8DC63F]/10 border-[#8DC63F]/30 text-[#578426]">
-                    {s}
-                    <button onClick={() => handleRemoveSubject(s)} className="hover:text-red-500 transition-colors"><X size={11} /></button>
-                  </Badge>
-                ))
+              {disabilityType !== "none" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Descripción de necesidades específicas</Label>
+                  <textarea value={disabilityDescription} onChange={e => { setDisabilityDescription(e.target.value); setHasChanges(true); }}
+                    rows={3} placeholder="Describe qué adaptaciones necesitas para tus tutorías..."
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF]/40 resize-none" />
+                </div>
               )}
-            </div>
-            <div className="flex gap-2">
-              <select value={newSubject} onChange={e => setNewSubject(e.target.value)}
-                className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF]/40">
-                <option value="">Selecciona una materia...</option>
-                {AVAILABLE_SUBJECTS.filter(s => !interestSubjects.includes(s)).map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-              <Button variant="outline" onClick={handleAddSubject} disabled={!newSubject}
-                className="gap-1.5 text-sm shrink-0 border-[#8DC63F]/40 text-[#578426] hover:bg-[#8DC63F]/10 disabled:opacity-40">
-                <Plus size={14} /> Agregar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <p className="text-[11px] text-muted-foreground">Esta información es confidencial y se usa para asignarte aulas y tutores adecuados.</p>
+            </CardContent>
+          </Card>
+        </div>
 
-        {/* Preferencias de horario */}
-        <Card className="border border-border/60 shadow-sm">
-          <CardHeader className="pb-3 border-b border-border/40">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Clock size={16} className="text-[#6B2D8B]" /> Preferencias de tutoría
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-4">
-            <p className="text-xs text-muted-foreground">Indica los horarios en los que prefieres recibir tutorías</p>
-            <div className="grid grid-cols-3 gap-3">
-              {SCHEDULE_OPTIONS.map(({ key, label, range, icon }) => {
-                const active = tutoringPreferences[key];
-                return (
-                  <button key={key} onClick={() => handleTogglePref(key)}
-                    className={cn(
-                      "flex flex-col items-center gap-1.5 rounded-xl border px-3 py-4 text-center transition-all",
-                      active
-                        ? "border-[#6B2D8B]/40 bg-[#6B2D8B]/10 text-[#6B2D8B]"
-                        : "border-border/60 bg-card text-muted-foreground hover:border-[#6B2D8B]/20 hover:bg-[#6B2D8B]/5"
-                    )}>
-                    <span className="text-2xl">{icon}</span>
-                    <span className="text-sm font-semibold">{label}</span>
-                    <span className="text-[10px] opacity-70">{range}</span>
-                    {active && <span className="flex items-center gap-0.5 text-[10px] font-medium"><CheckCircle2 size={10} /> Seleccionado</span>}
-                  </button>
-                );
-              })}
-            </div>
-            {!Object.values(tutoringPreferences).some(Boolean) && (
-              <p className="text-xs text-muted-foreground italic">No hay horario preferido seleccionado</p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Columna derecha: materias + preferencias */}
+        <div className="space-y-5">
+          {/* Materias de interés */}
+          <Card className="border border-border/60 shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/40">
+              <CardTitle className="text-base flex items-center gap-2">
+                <BookOpen size={16} className="text-[#8DC63F]" /> Materias de interés
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
+              <p className="text-xs text-muted-foreground">Selecciona las materias en las que necesitas tutorías.</p>
+              <div className="flex flex-wrap gap-1.5 min-h-[32px]">
+                {interestSubjects.length === 0 ? (
+                  <span className="text-xs text-muted-foreground italic">No hay materias seleccionadas</span>
+                ) : (
+                  interestSubjects.map(s => (
+                    <Badge key={s} variant="outline"
+                      className="gap-1 text-xs py-1 px-2.5 bg-[#8DC63F]/10 border-[#8DC63F]/30 text-[#578426]">
+                      {s}
+                      <button onClick={() => handleRemoveSubject(s)} className="hover:text-red-500 transition-colors"><X size={11} /></button>
+                    </Badge>
+                  ))
+                )}
+              </div>
+              <div className="flex gap-2">
+                <select value={newSubject} onChange={e => setNewSubject(e.target.value)}
+                  className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF]/40">
+                  <option value="">Selecciona una materia...</option>
+                  {AVAILABLE_SUBJECTS.filter(s => !interestSubjects.includes(s)).map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <Button variant="outline" onClick={handleAddSubject} disabled={!newSubject}
+                  className="gap-1.5 text-sm shrink-0 border-[#8DC63F]/40 text-[#578426] hover:bg-[#8DC63F]/10 disabled:opacity-40">
+                  <Plus size={14} /> Agregar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Botón guardar */}
-        {hasChanges && (
-          <Button onClick={handleSaveNow} disabled={saving}
-            className="w-full gap-2 bg-[#00AEEF] hover:bg-[#0090C5] text-white font-semibold">
-            {saving ? <><Loader2 size={15} className="animate-spin" /> Guardando...</> : <><Save size={15} /> Guardar ahora</>}
-          </Button>
-        )}
+          {/* Preferencias de horario */}
+          <Card className="border border-border/60 shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/40">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Clock size={16} className="text-[#6B2D8B]" /> Preferencias de tutoría
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
+              <p className="text-xs text-muted-foreground">Indica los horarios en los que prefieres recibir tutorías</p>
+              <div className="grid grid-cols-3 gap-3">
+                {SCHEDULE_OPTIONS.map(({ key, label, range, icon }) => {
+                  const active = tutoringPreferences[key];
+                  return (
+                    <button key={key} onClick={() => handleTogglePref(key)}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 rounded-xl border px-3 py-4 text-center transition-all",
+                        active
+                          ? "border-[#6B2D8B]/40 bg-[#6B2D8B]/10 text-[#6B2D8B]"
+                          : "border-border/60 bg-card text-muted-foreground hover:border-[#6B2D8B]/20 hover:bg-[#6B2D8B]/5"
+                      )}>
+                      <span className="text-2xl">{icon}</span>
+                      <span className="text-sm font-semibold">{label}</span>
+                      <span className="text-[10px] opacity-70">{range}</span>
+                      {active && <span className="flex items-center gap-0.5 text-[10px] font-medium"><CheckCircle2 size={10} /> Seleccionado</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              {!Object.values(tutoringPreferences).some(Boolean) && (
+                <p className="text-xs text-muted-foreground italic">No hay horario preferido seleccionado</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      {/* Botón guardar — ancho completo fuera del grid */}
+      {hasChanges && (
+        <Button onClick={handleSaveNow} disabled={saving}
+          className="w-full mt-5 gap-2 bg-[#00AEEF] hover:bg-[#0090C5] text-white font-semibold">
+          {saving ? <><Loader2 size={15} className="animate-spin" /> Guardando...</> : <><Save size={15} /> Guardar ahora</>}
+        </Button>
+      )}
     </main>
   );
 };

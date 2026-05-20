@@ -73,7 +73,7 @@ const Notifications = () => {
   const unreadCount = notifications.filter(n => !readIds.includes(n.id)).length;
 
   return (
-    <main className="container mx-auto px-4 py-8 max-w-3xl animate-fade-in">
+    <main className="container mx-auto px-4 py-8 max-w-7xl animate-fade-in">
 
       <section className="mb-6">
         <div className="flex items-start justify-between flex-wrap gap-3">

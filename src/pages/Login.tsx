@@ -3,10 +3,12 @@ import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Lock, School, GraduationCap } from "lucide-react";
+import { Lock, School, GraduationCap, Moon, Sun } from "lucide-react";
+import { useTheme } from "@/components/ThemeProvider";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [studentId, setStudentId] = useState(() => localStorage.getItem("rememberedStudentId") || "");
   const [password, setPassword]   = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -55,7 +57,17 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#E6F4FB] via-white to-[#EEF7E0] flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-[#E6F4FB] via-white to-[#EEF7E0] dark:from-[#07101a] dark:via-[#0a1624] dark:to-[#0c1a10] flex items-center justify-center px-4 py-12 relative">
+
+      {/* Toggle dark mode */}
+      <button
+        onClick={toggleTheme}
+        aria-label={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+        className="absolute top-4 right-4 flex items-center justify-center h-9 w-9 rounded-full bg-white/70 dark:bg-white/10 border border-border/40 text-muted-foreground hover:text-foreground hover:bg-white dark:hover:bg-white/15 transition-all shadow-sm"
+      >
+        {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+      </button>
+
       <div className="w-full max-w-md">
 
         {/* Logo UNAB */}
@@ -73,7 +85,7 @@ const Login = () => {
         </div>
 
         <Card className="shadow-lg border border-border/60">
-          <CardHeader className="rounded-t-lg pb-4" style={{ background: "linear-gradient(135deg, #00AEEF 0%, #0090C5 60%, #6B2D8B 100%)" }}>
+          <CardHeader className="rounded-t-lg pb-4 dark:[background:linear-gradient(135deg,#0a4a6e_0%,#083854_60%,#2d1240_100%)]" style={{ background: "linear-gradient(135deg, #00AEEF 0%, #0090C5 60%, #6B2D8B 100%)" }}>
             <CardTitle className="text-xl text-white">Iniciar sesión</CardTitle>
             <CardDescription className="text-blue-100 text-sm">Accede con tu número de estudiante</CardDescription>
           </CardHeader>
