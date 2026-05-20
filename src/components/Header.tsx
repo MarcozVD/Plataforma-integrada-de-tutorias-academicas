@@ -84,11 +84,11 @@ const Header = () => {
   const isActive = (path: string) => location.pathname === path.split("#")[0];
 
   return (
-    <header className="sticky top-0 z-50 w-full shadow-md">
+    <header className="sticky top-0 z-50 w-full shadow-md dark:shadow-none">
       {/* Barra principal ajustada para confluir con TitleBar */}
 
       {/* Barra principal */}
-      <div className="bg-[#0090C5] text-white">
+      <div className="bg-[#0090C5] dark:bg-[#0d1f2d] text-white border-b border-transparent dark:border-white/5">
         <div className="container mx-auto flex items-center justify-between h-14 px-4">
 
           {/* Logo */}
@@ -196,7 +196,7 @@ const Header = () => {
 
       {/* Menú móvil */}
       {mobileOpen && (
-        <div className="md:hidden bg-[#0090C5] border-t border-white/20 pb-3 px-4 animate-fade-in">
+        <div className="md:hidden bg-[#0090C5] dark:bg-[#0d1f2d] border-t border-white/20 pb-3 px-4 animate-fade-in">
           {/* Info usuario */}
           {fullName && (
             <div className="flex items-center gap-3 py-3 border-b border-white/20 mb-2">

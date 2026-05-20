@@ -113,7 +113,7 @@ const TutorProfile = () => {
   );
 
   return (
-    <main className="container mx-auto px-4 py-8 max-w-5xl animate-fade-in">
+    <main className="container mx-auto px-6 py-8 max-w-7xl animate-fade-in">
 
       {/* Header */}
       <section className="mb-6">

@@ -42,9 +42,9 @@ const AppLayout = () => {
 
 
   return (
-    <div className="flex flex-col min-h-screen w-full">
+    <div className="flex flex-col h-screen w-full overflow-hidden">
       <TitleBar />
-      <div className="flex-1 overflow-auto bg-background">
+      <div className="flex-1 overflow-y-auto bg-background min-h-0">
         {!isAuthPage && <Header />}
         <Routes>
           <Route path="/" element={<Login />} />

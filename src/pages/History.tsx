@@ -107,7 +107,7 @@ const History = () => {
   const fullName = localStorage.getItem("fullName") || "";
 
   return (
-    <main className="container mx-auto px-4 py-8 max-w-4xl animate-fade-in">
+    <main className="container mx-auto px-6 py-8 max-w-7xl animate-fade-in">
 
       <section className="mb-6">
         <h1 className="text-2xl md:text-3xl font-bold text-foreground">Mis tutorías</h1>
