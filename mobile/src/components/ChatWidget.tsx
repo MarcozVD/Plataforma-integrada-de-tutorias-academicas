@@ -6,7 +6,6 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -16,45 +15,49 @@ import { Colors } from '@/theme/colors';
 
 type ChatStep = 'menu' | 'sessions' | 'my-sessions' | 'rooms';
 
-interface Message {
-  id: string;
-  sender: 'bot' | 'user';
-  text: string;
-}
-
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: '1',
-    sender: 'bot',
-    text: '¡Hola! 👋 Soy tu asistente de PITA. ¿En qué te puedo ayudar?',
-  },
-];
-
 const MENU_OPTIONS = [
-  { id: 'sessions', label: '📚 Ver tutorías disponibles' },
-  { id: 'my-sessions', label: '📅 Mis tutorías inscritas' },
-  { id: 'rooms', label: '🏢 Ver salones disponibles' },
+  { id: 'sessions',    label: 'Ver tutorías disponibles', icon: 'school-outline' as const },
+  { id: 'my-sessions', label: 'Mis tutorías inscritas',   icon: 'calendar-outline' as const },
+  { id: 'rooms',       label: 'Ver salones disponibles',  icon: 'business-outline' as const },
 ];
+
+const BOT_GREETINGS: Record<string, string> = {
+  sessions:    'Aquí están las tutorías disponibles:',
+  'my-sessions': 'Tus tutorías inscritas:',
+  rooms:       'Salones disponibles ahora:',
+};
 
 export default function ChatWidget() {
-  const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<ChatStep>('menu');
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const [open, setOpen]   = useState(false);
+  const [step, setStep]   = useState<ChatStep>('menu');
+  const [botMsg, setBotMsg] = useState('¡Hola! 👋 ¿En qué te puedo ayudar?');
   const queryClient = useQueryClient();
 
-  const { data: sessions = [], isLoading: loadingSessions } = useQuery<TutoringSession[]>({
+  const {
+    data: sessions = [],
+    isLoading: loadingSessions,
+    error: sessionsError,
+  } = useQuery<TutoringSession[]>({
     queryKey: ['sessions'],
     queryFn: () => api.get('/auth/sessions'),
     enabled: step === 'sessions',
   });
 
-  const { data: enrolled = [], isLoading: loadingEnrolled } = useQuery<TutoringSession[]>({
+  const {
+    data: enrolled = [],
+    isLoading: loadingEnrolled,
+    error: enrolledError,
+  } = useQuery<TutoringSession[]>({
     queryKey: ['enrolled-sessions'],
     queryFn: () => api.get('/auth/student/enrolled-sessions'),
     enabled: step === 'my-sessions',
   });
 
-  const { data: rooms = [], isLoading: loadingRooms } = useQuery<Room[]>({
+  const {
+    data: rooms = [],
+    isLoading: loadingRooms,
+    error: roomsError,
+  } = useQuery<Room[]>({
     queryKey: ['rooms'],
     queryFn: () => api.get('/auth/rooms'),
     enabled: step === 'rooms',
@@ -64,212 +67,279 @@ export default function ChatWidget() {
     mutationFn: (id: number) => api.post(`/auth/sessions/${id}/enroll`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
-      addBotMessage('✅ ¡Te inscribiste correctamente!');
+      setBotMsg('✅ ¡Te inscribiste correctamente!');
+      setStep('menu');
     },
-    onError: (e: any) => addBotMessage(`❌ Error: ${e.message}`),
+    onError: (e: any) => setBotMsg(`❌ Error: ${e.message}`),
   });
 
-  function addBotMessage(text: string) {
-    setMessages(m => [...m, { id: Date.now().toString(), sender: 'bot', text }]);
-  }
-
-  function addUserMessage(text: string) {
-    setMessages(m => [...m, { id: Date.now().toString(), sender: 'user', text }]);
-  }
-
-  function handleMenuSelect(id: string, label: string) {
-    addUserMessage(label);
+  function handleMenuSelect(id: string) {
     setStep(id as ChatStep);
-    if (id === 'sessions') addBotMessage('Aquí están las tutorías disponibles:');
-    if (id === 'my-sessions') addBotMessage('Tus tutorías inscritas:');
-    if (id === 'rooms') addBotMessage('Salones disponibles:');
+    setBotMsg(BOT_GREETINGS[id] ?? '');
   }
 
   function handleClose() {
     setOpen(false);
     setStep('menu');
-    setMessages(INITIAL_MESSAGES);
+    setBotMsg('¡Hola! 👋 ¿En qué te puedo ayudar?');
   }
 
   const isLoading =
-    (step === 'sessions' && loadingSessions) ||
-    (step === 'my-sessions' && loadingEnrolled) ||
-    (step === 'rooms' && loadingRooms);
+    (step === 'sessions'    && loadingSessions)  ||
+    (step === 'my-sessions' && loadingEnrolled)  ||
+    (step === 'rooms'       && loadingRooms);
+
+  const currentError =
+    step === 'sessions'    ? sessionsError  :
+    step === 'my-sessions' ? enrolledError  :
+    step === 'rooms'       ? roomsError     : null;
+
+  const availableSessions = sessions.filter(s => !s.is_enrolled && s.enrolled < s.capacity);
+  const availableRooms    = rooms.filter(r => r.available);
 
   return (
     <>
       {/* Floating button */}
       <TouchableOpacity
         onPress={() => setOpen(true)}
-        className="absolute bottom-4 right-4 w-14 h-14 rounded-full items-center justify-center shadow-lg"
-        style={{ backgroundColor: Colors.primary }}
+        className="absolute bottom-4 right-4 w-14 h-14 rounded-full items-center justify-center"
+        style={{
+          backgroundColor: Colors.primary,
+          shadowColor: Colors.primary,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.4,
+          shadowRadius: 8,
+          elevation: 8,
+        }}
       >
         <Ionicons name="chatbubble-ellipses-outline" size={26} color="#fff" />
       </TouchableOpacity>
 
       {/* Chat modal */}
-      <Modal
-        visible={open}
-        animationType="slide"
-        transparent
-        onRequestClose={handleClose}
-      >
-        <View className="flex-1 justify-end bg-black/30">
-          <View className="bg-white rounded-t-2xl" style={{ height: '75%' }}>
+      <Modal visible={open} animationType="slide" transparent onRequestClose={handleClose}>
+        <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.35)' }}>
+          <View className="bg-white rounded-t-3xl" style={{ height: '78%' }}>
+
             {/* Header */}
             <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-100">
-              <View className="flex-row items-center">
-                <View className="w-9 h-9 rounded-full bg-unab-blue items-center justify-center mr-2">
-                  <Ionicons name="chatbubble-outline" size={18} color="#fff" />
+              <View className="flex-row items-center gap-3">
+                <View
+                  className="w-10 h-10 rounded-full items-center justify-center"
+                  style={{ backgroundColor: Colors.primary }}
+                >
+                  <Ionicons name="school-outline" size={20} color="#fff" />
                 </View>
                 <View>
-                  <Text className="font-bold text-gray-800">Asistente PITA</Text>
-                  <View className="flex-row items-center">
-                    <View className="w-2 h-2 rounded-full bg-green-500 mr-1" />
-                    <Text className="text-green-500 text-xs">En línea</Text>
+                  <Text className="font-bold text-gray-800 text-base">Asistente PITA</Text>
+                  <View className="flex-row items-center gap-1">
+                    <View className="w-2 h-2 rounded-full bg-green-500" />
+                    <Text className="text-green-600 text-xs font-medium">En línea</Text>
                   </View>
                 </View>
               </View>
-              <TouchableOpacity onPress={handleClose}>
-                <Ionicons name="close" size={24} color={Colors.muted} />
+              <TouchableOpacity onPress={handleClose} className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center">
+                <Ionicons name="close" size={18} color={Colors.muted} />
               </TouchableOpacity>
             </View>
 
-            {/* Messages + content */}
-            <View className="flex-1 px-4 py-3">
-              {/* Last bot message */}
-              <View className="mb-3">
-                <View className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 self-start max-w-xs">
-                  <Text className="text-gray-800 text-sm">
-                    {messages[messages.length - 1]?.text}
-                  </Text>
-                </View>
+            {/* Bot message bubble */}
+            <View className="px-4 pt-4 pb-2">
+              <View
+                className="self-start px-4 py-3 rounded-2xl rounded-tl-sm max-w-xs"
+                style={{ backgroundColor: '#F1F5F9' }}
+              >
+                <Text className="text-gray-700 text-sm">{botMsg}</Text>
               </View>
+            </View>
 
-              {/* Menu options */}
+            {/* Content area */}
+            <View className="flex-1 px-4">
+
+              {/* Menu */}
               {step === 'menu' && (
-                <View className="gap-2">
+                <View className="gap-2 mt-2">
                   {MENU_OPTIONS.map(opt => (
                     <TouchableOpacity
                       key={opt.id}
-                      onPress={() => handleMenuSelect(opt.id, opt.label)}
-                      className="border border-unab-blue rounded-2xl px-4 py-3"
+                      onPress={() => handleMenuSelect(opt.id)}
+                      className="flex-row items-center gap-3 px-4 py-3.5 rounded-2xl border"
+                      style={{ borderColor: Colors.primary + '40', backgroundColor: Colors.primary + '08' }}
                     >
-                      <Text className="text-unab-blue font-medium text-sm">
+                      <View
+                        className="w-8 h-8 rounded-full items-center justify-center"
+                        style={{ backgroundColor: Colors.primary + '18' }}
+                      >
+                        <Ionicons name={opt.icon} size={16} color={Colors.primary} />
+                      </View>
+                      <Text className="font-semibold text-sm flex-1" style={{ color: Colors.primary }}>
                         {opt.label}
                       </Text>
+                      <Ionicons name="chevron-forward" size={16} color={Colors.primary + '80'} />
                     </TouchableOpacity>
                   ))}
                 </View>
               )}
 
-              {/* Sessions list */}
-              {step === 'sessions' && (
-                isLoading ? (
+              {/* Error state */}
+              {currentError && !isLoading && (
+                <View className="mt-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200">
+                  <Text className="text-red-600 text-xs font-semibold mb-0.5">No se pudo cargar</Text>
+                  <Text className="text-red-500 text-xs">{(currentError as Error).message}</Text>
+                </View>
+              )}
+
+              {/* Loading */}
+              {isLoading && (
+                <View className="items-center py-8 gap-2">
                   <ActivityIndicator color={Colors.primary} />
-                ) : (
-                  <FlatList
-                    data={sessions.filter(s => !s.is_enrolled && s.enrolled < s.capacity)}
-                    keyExtractor={item => String(item.id)}
-                    renderItem={({ item }) => (
-                      <View className="bg-gray-50 rounded-xl p-3 mb-2">
-                        <Text className="font-semibold text-gray-800 text-sm">
-                          {item.subject}
+                  <Text className="text-gray-400 text-xs">Cargando...</Text>
+                </View>
+              )}
+
+              {/* Available sessions */}
+              {step === 'sessions' && !isLoading && !currentError && (
+                <FlatList
+                  data={availableSessions}
+                  keyExtractor={item => String(item.id)}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 12 }}
+                  renderItem={({ item }) => (
+                    <View
+                      className="rounded-xl mb-2 overflow-hidden"
+                      style={{ borderLeftWidth: 3, borderLeftColor: Colors.primary, backgroundColor: '#F8FAFC' }}
+                    >
+                      <View className="px-3 py-2.5">
+                        <Text className="font-bold text-gray-800 text-sm">{item.subject}</Text>
+                        <Text className="text-gray-500 text-xs mt-0.5">
+                          {item.tutor_name}
                         </Text>
-                        <Text className="text-gray-500 text-xs">
-                          {item.tutor_name} · {item.date} {item.time}
-                        </Text>
+                        <View className="flex-row items-center gap-3 mt-1.5">
+                          <View className="flex-row items-center gap-1">
+                            <Ionicons name="calendar-outline" size={11} color={Colors.muted} />
+                            <Text className="text-gray-400 text-xs">{item.date}</Text>
+                          </View>
+                          <View className="flex-row items-center gap-1">
+                            <Ionicons name="time-outline" size={11} color={Colors.muted} />
+                            <Text className="text-gray-400 text-xs">{item.time}</Text>
+                          </View>
+                          <View className="flex-row items-center gap-1">
+                            <Ionicons name="people-outline" size={11} color={Colors.muted} />
+                            <Text className="text-gray-400 text-xs">
+                              {item.capacity - item.enrolled} cupos
+                            </Text>
+                          </View>
+                        </View>
                         <TouchableOpacity
                           onPress={() => enrollMutation.mutate(item.id)}
                           disabled={enrollMutation.isPending}
-                          className="bg-unab-blue rounded-lg py-1.5 mt-2 items-center"
+                          className="rounded-lg py-1.5 mt-2 items-center"
+                          style={{ backgroundColor: Colors.primary }}
                         >
-                          <Text className="text-white text-xs font-medium">
-                            Inscribirse
-                          </Text>
+                          {enrollMutation.isPending
+                            ? <ActivityIndicator size="small" color="#fff" />
+                            : <Text className="text-white text-xs font-semibold">Inscribirse</Text>}
                         </TouchableOpacity>
                       </View>
-                    )}
-                    ListEmptyComponent={
-                      <Text className="text-gray-400 text-sm text-center py-4">
-                        No hay tutorías disponibles
-                      </Text>
-                    }
-                    showsVerticalScrollIndicator={false}
-                  />
-                )
+                    </View>
+                  )}
+                  ListEmptyComponent={
+                    <View className="items-center py-8 gap-2">
+                      <Ionicons name="calendar-outline" size={32} color={Colors.muted} />
+                      <Text className="text-gray-400 text-sm">No hay tutorías disponibles</Text>
+                    </View>
+                  }
+                />
               )}
 
-              {/* My enrolled sessions */}
-              {step === 'my-sessions' && (
-                isLoading ? (
-                  <ActivityIndicator color={Colors.primary} />
-                ) : (
-                  <FlatList
-                    data={enrolled}
-                    keyExtractor={item => String(item.id)}
-                    renderItem={({ item }) => (
-                      <View className="bg-gray-50 rounded-xl p-3 mb-2">
-                        <Text className="font-semibold text-gray-800 text-sm">
-                          {item.subject}
-                        </Text>
-                        <Text className="text-gray-500 text-xs">
-                          {item.date} {item.time} ·{' '}
-                          {item.is_virtual ? 'Virtual' : item.room}
-                        </Text>
+              {/* Enrolled sessions */}
+              {step === 'my-sessions' && !isLoading && !currentError && (
+                <FlatList
+                  data={enrolled}
+                  keyExtractor={item => String(item.id)}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 12 }}
+                  renderItem={({ item }) => (
+                    <View
+                      className="rounded-xl mb-2"
+                      style={{ borderLeftWidth: 3, borderLeftColor: Colors.green, backgroundColor: '#F0FFF4' }}
+                    >
+                      <View className="px-3 py-2.5">
+                        <Text className="font-bold text-gray-800 text-sm">{item.subject}</Text>
+                        <Text className="text-gray-500 text-xs mt-0.5">{item.tutor_name}</Text>
+                        <View className="flex-row items-center gap-3 mt-1.5">
+                          <View className="flex-row items-center gap-1">
+                            <Ionicons name="calendar-outline" size={11} color={Colors.muted} />
+                            <Text className="text-gray-400 text-xs">{item.date}</Text>
+                          </View>
+                          <View className="flex-row items-center gap-1">
+                            <Ionicons name="time-outline" size={11} color={Colors.muted} />
+                            <Text className="text-gray-400 text-xs">{item.time}</Text>
+                          </View>
+                          <Text className="text-gray-400 text-xs ml-auto">
+                            {item.is_virtual ? 'Virtual' : item.room ?? ''}
+                          </Text>
+                        </View>
                       </View>
-                    )}
-                    ListEmptyComponent={
-                      <Text className="text-gray-400 text-sm text-center py-4">
-                        No tienes tutorías inscritas
-                      </Text>
-                    }
-                    showsVerticalScrollIndicator={false}
-                  />
-                )
+                    </View>
+                  )}
+                  ListEmptyComponent={
+                    <View className="items-center py-8 gap-2">
+                      <Ionicons name="school-outline" size={32} color={Colors.muted} />
+                      <Text className="text-gray-400 text-sm">No tienes tutorías inscritas</Text>
+                    </View>
+                  }
+                />
               )}
 
-              {/* Rooms */}
-              {step === 'rooms' && (
-                isLoading ? (
-                  <ActivityIndicator color={Colors.primary} />
-                ) : (
-                  <FlatList
-                    data={rooms.filter(r => r.available)}
-                    keyExtractor={item => String(item.id)}
-                    renderItem={({ item }) => (
-                      <View className="bg-gray-50 rounded-xl p-3 mb-2">
-                        <Text className="font-semibold text-gray-800 text-sm">
-                          {item.name}
-                        </Text>
-                        <Text className="text-gray-500 text-xs">
-                          {item.building} · Cap: {item.capacity}
-                        </Text>
+              {/* Available rooms */}
+              {step === 'rooms' && !isLoading && !currentError && (
+                <FlatList
+                  data={availableRooms}
+                  keyExtractor={item => String(item.id)}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 12 }}
+                  renderItem={({ item }) => (
+                    <View
+                      className="rounded-xl mb-2"
+                      style={{ borderLeftWidth: 3, borderLeftColor: Colors.green, backgroundColor: '#F8FAFC' }}
+                    >
+                      <View className="px-3 py-2.5 flex-row items-center justify-between">
+                        <View className="flex-1">
+                          <Text className="font-bold text-gray-800 text-sm">{item.name}</Text>
+                          <Text className="text-gray-500 text-xs mt-0.5">
+                            {item.building}{item.floor ? ` · Piso ${item.floor}` : ''}
+                          </Text>
+                        </View>
+                        <View className="flex-row items-center gap-1 ml-3">
+                          <Ionicons name="people-outline" size={12} color={Colors.muted} />
+                          <Text className="text-gray-500 text-xs">{item.capacity}</Text>
+                        </View>
                       </View>
-                    )}
-                    ListEmptyComponent={
-                      <Text className="text-gray-400 text-sm text-center py-4">
-                        No hay salones disponibles
-                      </Text>
-                    }
-                    showsVerticalScrollIndicator={false}
-                  />
-                )
+                    </View>
+                  )}
+                  ListEmptyComponent={
+                    <View className="items-center py-8 gap-2">
+                      <Ionicons name="business-outline" size={32} color={Colors.muted} />
+                      <Text className="text-gray-400 text-sm">No hay salones disponibles</Text>
+                    </View>
+                  }
+                />
               )}
             </View>
 
             {/* Back to menu */}
             {step !== 'menu' && (
-              <View className="px-4 pb-4 border-t border-gray-100 pt-3">
+              <View className="px-4 pb-5 pt-2 border-t border-gray-100">
                 <TouchableOpacity
                   onPress={() => {
                     setStep('menu');
-                    addBotMessage('¿En qué más te puedo ayudar?');
+                    setBotMsg('¿En qué más te puedo ayudar?');
                   }}
-                  className="flex-row items-center justify-center bg-gray-100 rounded-xl py-3"
+                  className="flex-row items-center justify-center rounded-xl py-3 gap-1.5"
+                  style={{ backgroundColor: '#F1F5F9' }}
                 >
-                  <Ionicons name="arrow-back-outline" size={16} color={Colors.muted} />
-                  <Text className="text-gray-500 text-sm ml-1">Volver al menú</Text>
+                  <Ionicons name="arrow-back-outline" size={15} color={Colors.muted} />
+                  <Text className="text-gray-500 text-sm font-medium">Volver al menú</Text>
                 </TouchableOpacity>
               </View>
             )}

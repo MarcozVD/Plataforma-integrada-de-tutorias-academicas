@@ -2,11 +2,14 @@
   "expo": {
     "name": "PITA",
     "slug": "pita-tutorias",
+    "owner": "marcoz21",
     "version": "1.0.0",
     "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tutorias.unab"
@@ -14,7 +17,15 @@
     "android": {
       "package": "com.tutorias.unab"
     },
-    "plugins": ["expo-router"],
-    "scheme": "pita"
+    "plugins": [
+      "expo-router"
+    ],
+    "scheme": "pita",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "eb8f918b-3cb7-47e6-975f-86117ebc2e19"
+      }
+    }
   }
 }

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PITA — Plataforma Integrada de Tutorías Académicas · UNAB</title>
+  <meta name="description" content="La plataforma oficial de tutorías de la Universidad Autónoma de Bucaramanga. Disponible en escritorio y móvil." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="navbar" id="navbar">
+    <div class="container nav-inner">
+      <a href="#" class="nav-logo">
+        <div class="logo-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+        </div>
+        <div>
+          <span class="logo-title">PITA</span>
+          <span class="logo-sub">UNAB · Tutorías</span>
+        </div>
+      </a>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#features">Funciones</a></li>
+        <li><a href="#how">¿Cómo funciona?</a></li>
+        <li><a href="#roles">Roles</a></li>
+        <li><a href="#download">Descargar</a></li>
+      </ul>
+      <button class="hamburger" id="hamburger" aria-label="Menú">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-dots"></div>
+    <div class="container hero-inner">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        Plataforma oficial UNAB &nbsp;·&nbsp; v1.2.0
+      </div>
+      <h1 class="hero-title">La forma más fácil de<br><span class="accent-green">acceder a tutorías</span></h1>
+      <p class="hero-sub">Conecta con los mejores tutores de la UNAB, reserva tu lugar en segundos y aprende sin límites — desde tu computador o tu celular.</p>
+      <div class="hero-actions">
+        <a href="#download" class="btn btn-white">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Descargar PITA
+        </a>
+        <a href="#features" class="btn btn-outline-white">Ver funciones</a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card">
+          <strong>Escritorio + Móvil</strong>
+          <span>Windows y Android</span>
+        </div>
+        <div class="stat-card">
+          <strong>10 materias</strong>
+          <span>Cálculo, Física, Inglés y más</span>
+        </div>
+        <div class="stat-card">
+          <strong>Asistente IA</strong>
+          <span>Orientación instantánea</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLATFORM STRIP -->
+  <div class="platform-strip">
+    <div class="container platform-inner">
+      <span class="platform-label">Disponible en</span>
+      <div class="platform-badges">
+        <span class="plat-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          Windows
+        </span>
+        <span class="plat-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          Android
+        </span>
+        <span class="plat-divider"></span>
+        <span class="plat-info">Misma cuenta, mismos datos en todas las plataformas</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section class="section bg-gray" id="features">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag blue">Funcionalidades</span>
+        <h2>Todo lo que necesitas para aprender</h2>
+        <p>Diseñada para una experiencia fluida — en cualquier dispositivo, en cualquier momento.</p>
+      </div>
+      <div class="grid grid-3">
+        <div class="feature-card">
+          <div class="feature-icon blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </div>
+          <h3>Tutorías en tiempo real</h3>
+          <p>Explora sesiones disponibles, filtra por materia, horario y necesidades de accesibilidad. Inscríbete con un toque.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <h3>Salones inteligentes</h3>
+          <p>Consulta disponibilidad, capacidad y recursos de cada salón. Filtra por piso, accesibilidad y equipamiento.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <h3>Horario personalizado</h3>
+          <p>Crea y gestiona tu horario semanal. Tus tutorías inscritas aparecen automáticamente sin hacer nada extra.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <h3>Asistente inteligente</h3>
+          <p>Consulta tutorías disponibles, revisa tus inscripciones y explora salones libres directamente desde el chat.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <h3>Valoraciones y lista de espera</h3>
+          <p>Califica cada tutoría y únete a la lista de espera cuando el cupo está lleno — te avisamos si se libera un lugar.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon purple">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Accesibilidad total</h3>
+          <p>Filtra salones y tutorías según tus necesidades. PITA está diseñada para que todos los estudiantes participen.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="section bg-white" id="how">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag green">Proceso</span>
+        <h2>Empieza en 3 pasos</h2>
+        <p>Sin complicaciones. En menos de un minuto ya puedes inscribirte en tu primera tutoría.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">01</div>
+          <div class="step-connector"></div>
+          <h3>Crea tu cuenta</h3>
+          <p>Regístrate con tu ID universitario UNAB. Solo toma unos segundos.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">02</div>
+          <div class="step-connector"></div>
+          <h3>Explora tutorías</h3>
+          <p>Busca por materia, tutor o fecha. Filtra por tus necesidades de accesibilidad.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">03</div>
+          <h3>Inscríbete y aprende</h3>
+          <p>Reserva tu lugar con un toque, recibe recordatorios y valora tu experiencia al terminar.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ROLES -->
+  <section class="section bg-gray" id="roles">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag purple">Roles</span>
+        <h2>Una plataforma para todos</h2>
+        <p>Cada usuario tiene su propio espacio, adaptado a lo que necesita.</p>
+      </div>
+      <div class="grid grid-3">
+        <div class="role-card">
+          <div class="role-header blue-header">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>Estudiante</span>
+          </div>
+          <ul class="role-list">
+            <li>Ver y filtrar tutorías disponibles</li>
+            <li>Inscribirse y cancelar inscripciones</li>
+            <li>Lista de espera automática</li>
+            <li>Horario semanal personalizado</li>
+            <li>Historial de sesiones y valoraciones</li>
+            <li>Asistente IA integrado</li>
+          </ul>
+        </div>
+        <div class="role-card">
+          <div class="role-header green-header">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+            <span>Tutor</span>
+          </div>
+          <ul class="role-list">
+            <li>Crear y gestionar sesiones</li>
+            <li>Ver lista de inscritos</li>
+            <li>Definir materias y disponibilidad</li>
+            <li>Perfil profesional público</li>
+            <li>Seguimiento de asistencia</li>
+            <li>Panel dedicado de gestión</li>
+          </ul>
+        </div>
+        <div class="role-card">
+          <div class="role-header purple-header">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>Administrador</span>
+          </div>
+          <ul class="role-list">
+            <li>Gestión completa de usuarios</li>
+            <li>Control de salones y recursos</li>
+            <li>Supervisión de sesiones activas</li>
+            <li>Métricas y reportes</li>
+            <li>Gestión de correo institucional</li>
+            <li>Configuración del sistema</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD -->
+  <section class="section bg-white" id="download">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag blue">Descargas</span>
+        <h2>Disponible en todas tus plataformas</h2>
+        <p>Una sola cuenta. Accede desde tu computador o tu teléfono sin perder nada.</p>
+      </div>
+      <div class="download-grid">
+
+        <!-- Desktop -->
+        <div class="download-card">
+          <div class="download-header blue-grad">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <div>
+              <h3>App de Escritorio</h3>
+              <p>Windows 10 / 11</p>
+            </div>
+          </div>
+          <div class="download-body">
+            <ul class="check-list">
+              <li>Instalador con un clic</li>
+              <li>Acceso sin navegador</li>
+              <li>Interfaz completa de administración</li>
+              <li>Compatible con Windows 10 y 11 (64-bit)</li>
+            </ul>
+            <a href="assets/PITA-Setup-1.1.0.exe" download class="btn btn-blue w-full">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Descargar para Windows
+            </a>
+            <p class="download-meta">v1.1.0 · ~85 MB · Windows 10 / 11</p>
+            <div class="instructions">
+              <p class="inst-title">Instalación</p>
+              <ol>
+                <li>Descarga el instalador y ejecútalo</li>
+                <li>Acepta los permisos de instalación</li>
+                <li>Sigue el asistente — listo en menos de un minuto</li>
+                <li>Abre PITA desde el escritorio o el menú Inicio</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile -->
+        <div class="download-card">
+          <div class="download-header green-grad">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            <div>
+              <h3>App Móvil</h3>
+              <p>Android 6.0+</p>
+            </div>
+          </div>
+          <div class="download-body">
+            <ul class="check-list green">
+              <li>Interfaz diseñada para pantallas táctiles</li>
+              <li>Notificaciones de sesiones y cambios</li>
+              <li>Asistente IA disponible en móvil</li>
+              <li>Compatible con Android 6.0 o superior</li>
+            </ul>
+            <div class="apk-coming">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+              <p class="apk-soon-title">APK disponible próximamente</p>
+              <p class="apk-soon-sub">El instalador para Android estará disponible en esta página en breve.</p>
+            </div>
+            <div class="instructions" style="margin-top:16px">
+              <p class="inst-title">Instalación</p>
+              <ol>
+                <li>Descarga el archivo <strong>.apk</strong> desde este sitio</li>
+                <li>En tu Android, ve a Ajustes → Seguridad y activa <strong>Fuentes desconocidas</strong></li>
+                <li>Abre el archivo descargado e instala</li>
+                <li>Inicia sesión con tu cuenta UNAB</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="container text-center">
+      <div class="cta-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+      </div>
+      <h2>Tu próxima tutoría está a un clic</h2>
+      <p>Descarga PITA, crea tu cuenta con tu ID universitario y empieza hoy mismo.</p>
+      <a href="#download" class="btn btn-white">
+        Descargar PITA
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-logo">
+        <div class="logo-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+        </div>
+        <div>
+          <span class="logo-title">PITA</span>
+          <span class="logo-sub">Universidad Autónoma de Bucaramanga</span>
+        </div>
+      </div>
+      <p class="footer-copy">© 2026 UNAB · Plataforma Integrada de Tutorías Académicas · v1.2.0</p>
+    </div>
+  </footer>
+
+  <script>
+    window.addEventListener('scroll', () => {
+      document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20);
+    });
+
+    const hamburger = document.getElementById('hamburger');
+    const navLinks  = document.getElementById('navLinks');
+    hamburger.addEventListener('click', () => {
+      hamburger.classList.toggle('open');
+      navLinks.classList.toggle('open');
+    });
+    navLinks.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+      hamburger.classList.remove('open');
+      navLinks.classList.remove('open');
+    }));
+
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.feature-card, .step, .role-card, .download-card').forEach(el => {
+      el.classList.add('reveal');
+      observer.observe(el);
+    });
+  </script>
+</body>
+</html>

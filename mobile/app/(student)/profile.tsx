@@ -22,16 +22,16 @@ const SUBJECTS = [
 ];
 
 const SCHEDULES = [
-  { key: 'morning', label: 'Mañana (6am–12pm)' },
-  { key: 'afternoon', label: 'Tarde (12pm–6pm)' },
-  { key: 'evening', label: 'Noche (6pm–10pm)' },
+  { key: 'morning',   label: 'Mañana',  sub: '6am – 12pm', icon: 'sunny-outline' },
+  { key: 'afternoon', label: 'Tarde',   sub: '12pm – 6pm', icon: 'partly-sunny-outline' },
+  { key: 'evening',   label: 'Noche',   sub: '6pm – 10pm', icon: 'moon-outline' },
 ];
 
 const DISABILITY_OPTIONS = [
-  { value: 'ninguna', label: 'Ninguna' },
-  { value: 'visual', label: 'Visual' },
-  { value: 'auditiva', label: 'Auditiva' },
-  { value: 'motriz', label: 'Motriz' },
+  { value: 'ninguna',  label: 'Ninguna',  icon: 'person-outline' },
+  { value: 'visual',   label: 'Visual',   icon: 'eye-outline' },
+  { value: 'auditiva', label: 'Auditiva', icon: 'ear-outline' },
+  { value: 'motriz',   label: 'Motriz',   icon: 'accessibility-outline' },
 ];
 
 export default function StudentProfileScreen() {
@@ -39,272 +39,270 @@ export default function StudentProfileScreen() {
   const router = useRouter();
   const { fullName, studentId, carrera, logout } = useAuth();
 
-  const [savingSubjects, setSavingSubjects] = useState(false);
-  const [savingDisability, setSavingDisability] = useState(false);
-
-  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [savingPrefs,   setSavingPrefs]   = useState(false);
+  const [savingAccess,  setSavingAccess]  = useState(false);
+  const [selectedSubjects,  setSelectedSubjects]  = useState<string[]>([]);
   const [selectedSchedules, setSelectedSchedules] = useState<string[]>([]);
   const [disabilityType, setDisabilityType] = useState('ninguna');
   const [disabilityDesc, setDisabilityDesc] = useState('');
 
   useEffect(() => {
-    loadPreferences();
-  }, []);
-
-  async function loadPreferences() {
-    const [subjects, schedules, disInfo] = await Promise.all([
+    Promise.all([
       storage.getJson<string[]>('interest_subjects'),
       storage.getJson<string[]>('tutoring_preferences'),
       storage.getJson<{ type: string; description: string }>('disability_info'),
-    ]);
-    if (subjects) setSelectedSubjects(subjects);
-    if (schedules) setSelectedSchedules(schedules);
-    if (disInfo) {
-      setDisabilityType(disInfo.type ?? 'ninguna');
-      setDisabilityDesc(disInfo.description ?? '');
-    }
-  }
+    ]).then(([subjects, schedules, disInfo]) => {
+      if (subjects)  setSelectedSubjects(subjects);
+      if (schedules) setSelectedSchedules(schedules);
+      if (disInfo) {
+        setDisabilityType(disInfo.type ?? 'ninguna');
+        setDisabilityDesc(disInfo.description ?? '');
+      }
+    });
+  }, []);
 
-  function toggleSubject(s: string) {
-    setSelectedSubjects(prev =>
-      prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s],
-    );
-  }
+  const toggleSubject  = (s: string) => setSelectedSubjects(p => p.includes(s)  ? p.filter(x => x !== s)  : [...p, s]);
+  const toggleSchedule = (k: string) => setSelectedSchedules(p => p.includes(k) ? p.filter(x => x !== k) : [...p, k]);
 
-  function toggleSchedule(k: string) {
-    setSelectedSchedules(prev =>
-      prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k],
-    );
-  }
-
-  async function saveSubjects() {
-    setSavingSubjects(true);
+  async function savePrefs() {
+    setSavingPrefs(true);
     try {
       await api.put('/auth/preferences', {
         interest_subjects: selectedSubjects,
         tutoring_preferences: selectedSchedules,
       });
-      await storage.setJson('interest_subjects', selectedSubjects);
-      await storage.setJson('tutoring_preferences', selectedSchedules);
-      Alert.alert('Guardado', 'Preferencias actualizadas');
+      await Promise.all([
+        storage.setJson('interest_subjects', selectedSubjects),
+        storage.setJson('tutoring_preferences', selectedSchedules),
+      ]);
+      Alert.alert('Guardado', 'Preferencias actualizadas correctamente');
     } catch (e: any) {
       Alert.alert('Error', e.message);
     } finally {
-      setSavingSubjects(false);
+      setSavingPrefs(false);
     }
   }
 
-  async function saveDisability() {
-    setSavingDisability(true);
+  async function saveAccess() {
+    setSavingAccess(true);
     try {
       await api.put('/auth/disability', {
         disability_type: disabilityType !== 'ninguna' ? disabilityType : null,
         disability_description: disabilityDesc || null,
       });
-      await storage.setJson('disability_info', {
-        type: disabilityType,
-        description: disabilityDesc,
-      });
+      await storage.setJson('disability_info', { type: disabilityType, description: disabilityDesc });
       Alert.alert('Guardado', 'Información de accesibilidad actualizada');
     } catch (e: any) {
       Alert.alert('Error', e.message);
     } finally {
-      setSavingDisability(false);
+      setSavingAccess(false);
     }
   }
 
   function handleLogout() {
-    Alert.alert('Cerrar sesión', '¿Deseas cerrar sesión?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Cerrar sesión',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace('/(auth)/login');
-        },
-      },
-    ]);
+    Alert.alert(
+      'Cerrar sesión',
+      '¿Deseas cerrar sesión?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Cerrar sesión', style: 'destructive', onPress: async () => { await logout(); router.replace('/(auth)/login'); } },
+      ],
+    );
   }
+
+  const initial = fullName?.charAt(0).toUpperCase() ?? 'U';
 
   return (
     <View className="flex-1 bg-slate-50" style={{ paddingTop: insets.top }}>
-      {/* Header */}
-      <View className="bg-unab-blue px-5 pt-4 pb-6">
-        <View className="flex-row justify-between items-center">
-          <Text className="text-white text-xl font-bold">Mi Perfil</Text>
+
+      {/* Header / Avatar */}
+      <View className="px-5 pt-4 pb-6" style={{ backgroundColor: Colors.primary }}>
+        <View className="flex-row justify-between items-start mb-5">
+          <View>
+            <Text className="text-white/70 text-xs font-medium tracking-wide uppercase">Plataforma de Tutorías</Text>
+            <Text className="text-white text-2xl font-bold mt-0.5">Mi Perfil</Text>
+          </View>
           <TouchableOpacity
             onPress={handleLogout}
-            className="flex-row items-center bg-white/20 px-3 py-1.5 rounded-xl"
+            className="flex-row items-center gap-1.5 px-3 py-2 rounded-xl"
+            style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }}
           >
-            <Ionicons name="log-out-outline" size={16} color="#fff" />
-            <Text className="text-white text-sm ml-1">Salir</Text>
+            <Ionicons name="log-out-outline" size={15} color="#fff" />
+            <Text className="text-white text-xs font-semibold">Salir</Text>
           </TouchableOpacity>
         </View>
-        <View className="flex-row items-center mt-4">
-          <View className="w-14 h-14 rounded-full bg-white/20 items-center justify-center">
-            <Text className="text-white text-2xl font-bold">
-              {fullName?.charAt(0).toUpperCase() ?? 'U'}
-            </Text>
+
+        <View className="flex-row items-center gap-4">
+          <View
+            className="w-16 h-16 rounded-2xl items-center justify-center"
+            style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)' }}
+          >
+            <Text className="text-white text-2xl font-bold">{initial}</Text>
           </View>
-          <View className="ml-3">
-            <Text className="text-white font-bold text-base">{fullName}</Text>
-            <Text className="text-white/80 text-sm">ID: {studentId}</Text>
-            {carrera ? (
-              <Text className="text-white/70 text-xs">{carrera}</Text>
-            ) : null}
+          <View className="flex-1">
+            <Text className="text-white font-bold text-lg">{fullName}</Text>
+            <View className="flex-row items-center gap-1.5 mt-0.5">
+              <Ionicons name="id-card-outline" size={13} color="rgba(255,255,255,0.7)" />
+              <Text className="text-white/70 text-sm">{studentId}</Text>
+            </View>
+            {carrera && (
+              <View className="flex-row items-center gap-1.5 mt-0.5">
+                <Ionicons name="school-outline" size={13} color="rgba(255,255,255,0.6)" />
+                <Text className="text-white/60 text-xs" numberOfLines={1}>{carrera}</Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        {/* Subjects */}
-        <View className="bg-white rounded-2xl p-5 mb-4 shadow-sm">
-          <Text className="font-bold text-gray-800 text-base mb-1">
-            Materias de interés
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 100 }}>
+
+        {/* Materias de interés */}
+        <View className="bg-white rounded-2xl p-5" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, elevation: 3 }}>
+          <View className="flex-row items-center gap-2 mb-1">
+            <View className="w-7 h-7 rounded-xl items-center justify-center" style={{ backgroundColor: Colors.primary + '18' }}>
+              <Ionicons name="book-outline" size={15} color={Colors.primary} />
+            </View>
+            <Text className="font-bold text-gray-800 text-base">Materias de interés</Text>
+          </View>
+          <Text className="text-gray-400 text-xs mb-4 ml-9">
+            Selecciona las materias para recibir tutorías
           </Text>
-          <Text className="text-gray-500 text-xs mb-4">
-            Selecciona las materias en las que quieres recibir tutorías
-          </Text>
-          <View className="flex-row flex-wrap gap-2 mb-4">
-            {SUBJECTS.map(s => (
-              <TouchableOpacity
-                key={s}
-                onPress={() => toggleSubject(s)}
-                className={`px-3 py-1.5 rounded-full border ${
-                  selectedSubjects.includes(s)
-                    ? 'bg-unab-blue border-unab-blue'
-                    : 'bg-white border-gray-300'
-                }`}
-              >
-                <Text
-                  className={`text-sm ${
-                    selectedSubjects.includes(s) ? 'text-white' : 'text-gray-600'
-                  }`}
+          <View className="flex-row flex-wrap gap-2 mb-5">
+            {SUBJECTS.map(s => {
+              const active = selectedSubjects.includes(s);
+              return (
+                <TouchableOpacity
+                  key={s}
+                  onPress={() => toggleSubject(s)}
+                  className="px-3.5 py-2 rounded-xl border"
+                  style={{
+                    backgroundColor: active ? Colors.primary : '#F8FAFC',
+                    borderColor: active ? Colors.primary : '#E2E8F0',
+                  }}
                 >
-                  {s}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text className="text-xs font-semibold" style={{ color: active ? '#fff' : '#64748B' }}>
+                    {s}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
-          <Text className="font-semibold text-gray-700 text-sm mb-2">
-            Horario preferido
-          </Text>
-          <View className="gap-2 mb-4">
-            {SCHEDULES.map(sch => (
-              <TouchableOpacity
-                key={sch.key}
-                onPress={() => toggleSchedule(sch.key)}
-                className={`flex-row items-center p-3 rounded-xl border ${
-                  selectedSchedules.includes(sch.key)
-                    ? 'bg-unab-blue/10 border-unab-blue'
-                    : 'bg-gray-50 border-gray-200'
-                }`}
-              >
-                <View
-                  className={`w-5 h-5 rounded-full border-2 items-center justify-center mr-3 ${
-                    selectedSchedules.includes(sch.key)
-                      ? 'border-unab-blue bg-unab-blue'
-                      : 'border-gray-400 bg-white'
-                  }`}
+          {/* Horario preferido */}
+          <View className="flex-row items-center gap-2 mb-3">
+            <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
+            <Text className="font-semibold text-gray-700 text-sm">Horario preferido</Text>
+          </View>
+          <View className="gap-2 mb-5">
+            {SCHEDULES.map(sch => {
+              const active = selectedSchedules.includes(sch.key);
+              return (
+                <TouchableOpacity
+                  key={sch.key}
+                  onPress={() => toggleSchedule(sch.key)}
+                  className="flex-row items-center p-3.5 rounded-xl border"
+                  style={{
+                    backgroundColor: active ? Colors.primary + '0D' : '#F8FAFC',
+                    borderColor: active ? Colors.primary : '#E2E8F0',
+                  }}
                 >
-                  {selectedSchedules.includes(sch.key) && (
-                    <Ionicons name="checkmark" size={12} color="#fff" />
-                  )}
-                </View>
-                <Text
-                  className={`text-sm ${
-                    selectedSchedules.includes(sch.key)
-                      ? 'text-unab-blue font-medium'
-                      : 'text-gray-700'
-                  }`}
-                >
-                  {sch.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <View
+                    className="w-9 h-9 rounded-xl items-center justify-center mr-3"
+                    style={{ backgroundColor: active ? Colors.primary + '20' : '#F1F5F9' }}
+                  >
+                    <Ionicons name={sch.icon as any} size={18} color={active ? Colors.primary : Colors.muted} />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-sm font-semibold" style={{ color: active ? Colors.primary : '#374151' }}>
+                      {sch.label}
+                    </Text>
+                    <Text className="text-xs text-gray-400">{sch.sub}</Text>
+                  </View>
+                  <View
+                    className="w-5 h-5 rounded-full border-2 items-center justify-center"
+                    style={{ borderColor: active ? Colors.primary : '#CBD5E1', backgroundColor: active ? Colors.primary : '#fff' }}
+                  >
+                    {active && <Ionicons name="checkmark" size={11} color="#fff" />}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           <TouchableOpacity
-            onPress={saveSubjects}
-            disabled={savingSubjects}
-            className="bg-unab-blue py-3 rounded-xl items-center"
-            style={{ opacity: savingSubjects ? 0.7 : 1 }}
+            onPress={savePrefs}
+            disabled={savingPrefs}
+            className="rounded-xl py-3.5 items-center"
+            style={{ backgroundColor: Colors.primary, opacity: savingPrefs ? 0.7 : 1 }}
           >
-            {savingSubjects ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text className="text-white font-semibold">Guardar preferencias</Text>
-            )}
+            {savingPrefs
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text className="text-white font-bold">Guardar preferencias</Text>}
           </TouchableOpacity>
         </View>
 
-        {/* Accessibility */}
-        <View className="bg-white rounded-2xl p-5 shadow-sm">
-          <Text className="font-bold text-gray-800 text-base mb-1">
-            Accesibilidad
-          </Text>
-          <Text className="text-gray-500 text-xs mb-4">
-            Esta información nos ayuda a recomendarte espacios adecuados
+        {/* Accesibilidad */}
+        <View className="bg-white rounded-2xl p-5" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, elevation: 3 }}>
+          <View className="flex-row items-center gap-2 mb-1">
+            <View className="w-7 h-7 rounded-xl items-center justify-center" style={{ backgroundColor: Colors.purple + '18' }}>
+              <Ionicons name="accessibility-outline" size={15} color={Colors.purple} />
+            </View>
+            <Text className="font-bold text-gray-800 text-base">Accesibilidad</Text>
+          </View>
+          <Text className="text-gray-400 text-xs mb-4 ml-9">
+            Nos ayuda a recomendarte espacios adecuados
           </Text>
 
-          <Text className="text-gray-600 text-sm font-medium mb-2">
-            Tipo de discapacidad
-          </Text>
+          <Text className="text-gray-600 text-sm font-semibold mb-3">Tipo de discapacidad</Text>
           <View className="flex-row flex-wrap gap-2 mb-4">
-            {DISABILITY_OPTIONS.map(opt => (
-              <TouchableOpacity
-                key={opt.value}
-                onPress={() => setDisabilityType(opt.value)}
-                className={`px-4 py-2 rounded-full border ${
-                  disabilityType === opt.value
-                    ? 'bg-unab-purple border-unab-purple'
-                    : 'bg-white border-gray-300'
-                }`}
-              >
-                <Text
-                  className={`text-sm ${
-                    disabilityType === opt.value ? 'text-white' : 'text-gray-600'
-                  }`}
+            {DISABILITY_OPTIONS.map(opt => {
+              const active = disabilityType === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => setDisabilityType(opt.value)}
+                  className="flex-row items-center gap-1.5 px-3.5 py-2 rounded-xl border"
+                  style={{
+                    backgroundColor: active ? Colors.purple : '#F8FAFC',
+                    borderColor: active ? Colors.purple : '#E2E8F0',
+                  }}
                 >
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Ionicons name={opt.icon as any} size={13} color={active ? '#fff' : Colors.muted} />
+                  <Text className="text-xs font-semibold" style={{ color: active ? '#fff' : '#64748B' }}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {disabilityType !== 'ninguna' && (
             <View className="mb-4">
-              <Text className="text-gray-600 text-sm font-medium mb-1">
-                Descripción (opcional)
-              </Text>
+              <Text className="text-gray-600 text-sm font-semibold mb-2">Descripción (opcional)</Text>
               <TextInput
-                className="border border-gray-300 rounded-xl px-4 py-3 text-gray-800 bg-gray-50 h-20"
+                className="border border-gray-200 rounded-xl px-4 py-3 text-gray-800 bg-gray-50"
+                style={{ height: 80, textAlignVertical: 'top' }}
                 placeholder="Describe tu necesidad de apoyo..."
                 value={disabilityDesc}
                 onChangeText={setDisabilityDesc}
                 multiline
-                textAlignVertical="top"
               />
             </View>
           )}
 
           <TouchableOpacity
-            onPress={saveDisability}
-            disabled={savingDisability}
-            className="bg-unab-purple py-3 rounded-xl items-center"
-            style={{ opacity: savingDisability ? 0.7 : 1 }}
+            onPress={saveAccess}
+            disabled={savingAccess}
+            className="rounded-xl py-3.5 items-center"
+            style={{ backgroundColor: Colors.purple, opacity: savingAccess ? 0.7 : 1 }}
           >
-            {savingDisability ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text className="text-white font-semibold">
-                Guardar accesibilidad
-              </Text>
-            )}
+            {savingAccess
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text className="text-white font-bold">Guardar accesibilidad</Text>}
           </TouchableOpacity>
         </View>
+
       </ScrollView>
     </View>
   );
