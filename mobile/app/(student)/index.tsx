@@ -14,17 +14,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
-import { api } from '@/lib/api';
+import { api, BASE_URL } from '@/lib/api';
 import TutoringCard from '@/components/TutoringCard';
-import RoomCard from '@/components/RoomCard';
 import ChatWidget from '@/components/ChatWidget';
-import { TutoringSession, Room } from '@/types';
+import { TutoringSession } from '@/types';
 import { Colors } from '@/theme/colors';
 
 const DATE_QUICK = [
-  { label: 'Hoy',        value: new Date().toISOString().slice(0, 10) },
-  { label: 'Mañana',     value: new Date(Date.now() + 86400000).toISOString().slice(0, 10) },
-  { label: 'Esta semana',value: 'week' },
+  { label: 'Hoy',         value: new Date().toISOString().slice(0, 10) },
+  { label: 'Mañana',      value: new Date(Date.now() + 86400000).toISOString().slice(0, 10) },
+  { label: 'Esta semana', value: 'week' },
 ];
 
 const ACCESS_FILTERS = [
@@ -38,17 +37,18 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab]       = useState<'tutorias' | 'salones'>('tutorias');
   const [search, setSearch]             = useState('');
   const [dateFilter, setDateFilter]     = useState('');
   const [accessFilter, setAccessFilter] = useState<string[]>([]);
   const [showFilters, setShowFilters]   = useState(false);
 
-  const { data: sessions = [], isLoading: loadingSessions, refetch: refetchSessions } =
+  const { data: sessions = [], isLoading, refetch, error } =
     useQuery<TutoringSession[]>({ queryKey: ['sessions'], queryFn: () => api.get('/auth/sessions') });
 
-  const { data: rooms = [], isLoading: loadingRooms, refetch: refetchRooms } =
-    useQuery<Room[]>({ queryKey: ['rooms'], queryFn: () => api.get('/auth/rooms') });
+  const { data: waitlistRaw = [] } =
+    useQuery<{ session_id: number }[]>({ queryKey: ['my-waitlist'], queryFn: () => api.get('/auth/student/waitlist') });
+
+  const waitlistIds = useMemo(() => new Set(waitlistRaw.map(w => w.session_id)), [waitlistRaw]);
 
   const enrollMutation = useMutation({
     mutationFn: (id: number) => api.post(`/auth/sessions/${id}/enroll`, {}),
@@ -62,17 +62,29 @@ export default function DashboardScreen() {
     onError: (e: any) => Alert.alert('Error', e.message),
   });
 
+  const waitlistMutation = useMutation({
+    mutationFn: (id: number) => api.post(`/auth/sessions/${id}/waitlist`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-waitlist'] }),
+    onError: (e: any) => Alert.alert('Error', e.message),
+  });
+
+  const unwaitlistMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/auth/sessions/${id}/waitlist`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-waitlist'] }),
+    onError: (e: any) => Alert.alert('Error', e.message),
+  });
+
   const toggleAccess = (key: string) =>
     setAccessFilter(f => f.includes(key) ? f.filter(k => k !== key) : [...f, key]);
 
   const isWeekDate = (dateStr: string) => {
     const d = new Date(dateStr);
     const now = new Date();
-    const weekEnd = new Date(now.getTime() + 7 * 86400000);
-    return d >= now && d <= weekEnd;
+    return d >= now && d <= new Date(now.getTime() + 7 * 86400000);
   };
 
   const filteredSessions = useMemo(() => sessions.filter(s => {
+    if (s.is_enrolled) return false;
     const matchSearch = !search ||
       s.subject.toLowerCase().includes(search.toLowerCase()) ||
       s.tutor_name.toLowerCase().includes(search.toLowerCase());
@@ -88,21 +100,11 @@ export default function DashboardScreen() {
     return matchSearch && matchDate && matchAccess;
   }), [sessions, search, dateFilter, accessFilter]);
 
-  const filteredRooms = useMemo(() => rooms.filter(r => {
-    const matchSearch = !search ||
-      r.name.toLowerCase().includes(search.toLowerCase()) ||
-      r.building.toLowerCase().includes(search.toLowerCase());
-    const matchAccess = accessFilter.length === 0 ||
-      (accessFilter.includes('wheelchair') && r.has_wheelchair_access) ||
-      (accessFilter.includes('visual')     && r.has_visual_support) ||
-      (accessFilter.includes('hearing')    && r.has_hearing_support);
-    return matchSearch && matchAccess;
-  }), [rooms, search, accessFilter]);
-
   const activeFilterCount = (dateFilter ? 1 : 0) + accessFilter.length;
   const clearFilters = () => { setDateFilter(''); setAccessFilter([]); };
-  const isLoading = activeTab === 'tutorias' ? loadingSessions : loadingRooms;
   const firstName = fullName?.split(' ')[0] ?? 'Usuario';
+  const mutating = enrollMutation.isPending || unenrollMutation.isPending ||
+    waitlistMutation.isPending || unwaitlistMutation.isPending;
 
   return (
     <View className="flex-1 bg-slate-50" style={{ paddingTop: insets.top }}>
@@ -126,7 +128,7 @@ export default function DashboardScreen() {
             <Ionicons name="search-outline" size={16} color="rgba(255,255,255,0.7)" />
             <TextInput
               className="flex-1 ml-2 text-white text-sm"
-              placeholder={activeTab === 'tutorias' ? 'Buscar tutorías...' : 'Buscar salones...'}
+              placeholder="Buscar tutorías..."
               placeholderTextColor="rgba(255,255,255,0.5)"
               value={search}
               onChangeText={setSearch}
@@ -138,7 +140,6 @@ export default function DashboardScreen() {
             ) : null}
           </View>
 
-          {/* Filter toggle button */}
           <TouchableOpacity
             onPress={() => setShowFilters(v => !v)}
             className="w-11 h-11 rounded-xl items-center justify-center border border-white/20"
@@ -154,78 +155,33 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      {/* ── Tabs ─────────────────────────────────────────────────── */}
-      <View className="flex-row bg-white border-b border-gray-100">
-        {(['tutorias', 'salones'] as const).map(tab => (
-          <TouchableOpacity
-            key={tab}
-            onPress={() => { setActiveTab(tab); setAccessFilter([]); setDateFilter(''); }}
-            className="flex-1 items-center py-3"
-            style={{ borderBottomWidth: 2, borderBottomColor: activeTab === tab ? Colors.primary : 'transparent' }}
-          >
-            <View className="flex-row items-center gap-1.5">
-              <Ionicons
-                name={tab === 'tutorias' ? 'school-outline' : 'business-outline'}
-                size={15}
-                color={activeTab === tab ? Colors.primary : Colors.muted}
-              />
-              <Text
-                className="text-sm font-semibold"
-                style={{ color: activeTab === tab ? Colors.primary : Colors.muted }}
-              >
-                {tab === 'tutorias' ? 'Tutorías' : 'Salones'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       {/* ── Filter panel ─────────────────────────────────────────── */}
       {showFilters && (
         <View className="bg-white border-b border-gray-100 px-4 pt-3 pb-4">
+          <View className="mb-3">
+            <Text className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Fecha</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {DATE_QUICK.map(d => {
+                const active = dateFilter === d.value;
+                return (
+                  <TouchableOpacity
+                    key={d.value}
+                    onPress={() => setDateFilter(active ? '' : d.value)}
+                    className="flex-row items-center px-3.5 py-2 rounded-xl border"
+                    style={{ backgroundColor: active ? Colors.primary : '#F8FAFC', borderColor: active ? Colors.primary : '#E2E8F0' }}
+                  >
+                    <Ionicons name="calendar-outline" size={13} color={active ? '#fff' : Colors.muted} />
+                    <Text className="ml-1.5 text-xs font-semibold" style={{ color: active ? '#fff' : '#64748B' }}>
+                      {d.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
 
-          {/* Date filter — tutorías only */}
-          {activeTab === 'tutorias' && (
-            <View className="mb-3">
-              <Text className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                Fecha
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                {DATE_QUICK.map(d => {
-                  const active = dateFilter === d.value;
-                  return (
-                    <TouchableOpacity
-                      key={d.value}
-                      onPress={() => setDateFilter(active ? '' : d.value)}
-                      className="flex-row items-center px-3.5 py-2 rounded-xl border"
-                      style={{
-                        backgroundColor: active ? Colors.primary : '#F8FAFC',
-                        borderColor: active ? Colors.primary : '#E2E8F0',
-                      }}
-                    >
-                      <Ionicons
-                        name="calendar-outline"
-                        size={13}
-                        color={active ? '#fff' : Colors.muted}
-                      />
-                      <Text
-                        className="ml-1.5 text-xs font-semibold"
-                        style={{ color: active ? '#fff' : '#64748B' }}
-                      >
-                        {d.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          )}
-
-          {/* Accessibility filter */}
           <View>
-            <Text className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Accesibilidad
-            </Text>
+            <Text className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Accesibilidad</Text>
             <View className="flex-row flex-wrap gap-2">
               {ACCESS_FILTERS.map(f => {
                 const active = accessFilter.includes(f.key);
@@ -234,16 +190,10 @@ export default function DashboardScreen() {
                     key={f.key}
                     onPress={() => toggleAccess(f.key)}
                     className="flex-row items-center px-3.5 py-2 rounded-xl border"
-                    style={{
-                      backgroundColor: active ? Colors.primary : '#F8FAFC',
-                      borderColor: active ? Colors.primary : '#E2E8F0',
-                    }}
+                    style={{ backgroundColor: active ? Colors.primary : '#F8FAFC', borderColor: active ? Colors.primary : '#E2E8F0' }}
                   >
                     <Ionicons name={f.icon} size={13} color={active ? '#fff' : Colors.muted} />
-                    <Text
-                      className="ml-1.5 text-xs font-semibold"
-                      style={{ color: active ? '#fff' : '#64748B' }}
-                    >
+                    <Text className="ml-1.5 text-xs font-semibold" style={{ color: active ? '#fff' : '#64748B' }}>
                       {f.label}
                     </Text>
                   </TouchableOpacity>
@@ -252,12 +202,8 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* Clear button */}
           {activeFilterCount > 0 && (
-            <TouchableOpacity
-              onPress={clearFilters}
-              className="flex-row items-center mt-3 self-start"
-            >
+            <TouchableOpacity onPress={clearFilters} className="flex-row items-center mt-3 self-start">
               <Ionicons name="close-circle-outline" size={14} color={Colors.error} />
               <Text className="text-xs font-medium ml-1" style={{ color: Colors.error }}>
                 Limpiar {activeFilterCount} filtro{activeFilterCount > 1 ? 's' : ''}
@@ -271,12 +217,23 @@ export default function DashboardScreen() {
       {!isLoading && (search || activeFilterCount > 0) && (
         <View className="px-4 py-2 bg-slate-50">
           <Text className="text-xs text-gray-400">
-            {activeTab === 'tutorias'
-              ? `${filteredSessions.length} tutoría${filteredSessions.length !== 1 ? 's' : ''} encontrada${filteredSessions.length !== 1 ? 's' : ''}`
-              : `${filteredRooms.length} salón${filteredRooms.length !== 1 ? 'es' : ''} encontrado${filteredRooms.length !== 1 ? 's' : ''}`}
+            {filteredSessions.length} tutoría{filteredSessions.length !== 1 ? 's' : ''} encontrada{filteredSessions.length !== 1 ? 's' : ''}
           </Text>
         </View>
       )}
+
+      {/* ── Error / debug banner ─────────────────────────────────── */}
+      {error ? (
+        <View className="mx-4 mt-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200">
+          <Text className="text-red-600 text-xs font-semibold mb-0.5">Error al cargar datos</Text>
+          <Text className="text-red-500 text-xs">{(error as Error).message}</Text>
+          {__DEV__ && <Text className="text-red-400 text-[10px] mt-1">Backend: {BASE_URL}</Text>}
+        </View>
+      ) : __DEV__ && !isLoading && sessions.length === 0 ? (
+        <View className="mx-4 mt-3 px-4 py-2 rounded-xl bg-yellow-50 border border-yellow-200">
+          <Text className="text-yellow-600 text-[10px]">Backend: {BASE_URL}</Text>
+        </View>
+      ) : null}
 
       {/* ── Content ──────────────────────────────────────────────── */}
       {isLoading ? (
@@ -284,7 +241,7 @@ export default function DashboardScreen() {
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text className="text-gray-400 text-sm">Cargando...</Text>
         </View>
-      ) : activeTab === 'tutorias' ? (
+      ) : (
         <FlatList
           data={filteredSessions}
           keyExtractor={item => String(item.id)}
@@ -293,12 +250,15 @@ export default function DashboardScreen() {
               session={item}
               onEnroll={() => enrollMutation.mutate(item.id)}
               onUnenroll={() => unenrollMutation.mutate(item.id)}
-              loading={enrollMutation.isPending || unenrollMutation.isPending}
+              onWaitlist={() => waitlistMutation.mutate(item.id)}
+              onUnwaitlist={() => unwaitlistMutation.mutate(item.id)}
+              isWaitlisted={waitlistIds.has(item.id)}
+              loading={mutating}
             />
           )}
           contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 100 }}
           refreshControl={
-            <RefreshControl refreshing={loadingSessions} onRefresh={refetchSessions} colors={[Colors.primary]} />
+            <RefreshControl refreshing={isLoading} onRefresh={refetch} colors={[Colors.primary]} />
           }
           ListEmptyComponent={
             <View className="items-center py-16 gap-3">
@@ -307,32 +267,10 @@ export default function DashboardScreen() {
               </View>
               <Text className="text-gray-500 font-medium">No hay tutorías disponibles</Text>
               {(search || activeFilterCount > 0) && (
-                <TouchableOpacity onPress={() => { setSearch(''); clearFilters(); }}
-                  className="px-4 py-2 rounded-xl border border-gray-200 mt-1">
-                  <Text className="text-gray-500 text-sm">Limpiar búsqueda</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          }
-        />
-      ) : (
-        <FlatList
-          data={filteredRooms}
-          keyExtractor={item => String(item.id)}
-          renderItem={({ item }) => <RoomCard room={item} />}
-          contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 100 }}
-          refreshControl={
-            <RefreshControl refreshing={loadingRooms} onRefresh={refetchRooms} colors={[Colors.primary]} />
-          }
-          ListEmptyComponent={
-            <View className="items-center py-16 gap-3">
-              <View className="w-16 h-16 rounded-full bg-gray-100 items-center justify-center">
-                <Ionicons name="business-outline" size={32} color={Colors.muted} />
-              </View>
-              <Text className="text-gray-500 font-medium">No hay salones disponibles</Text>
-              {(search || activeFilterCount > 0) && (
-                <TouchableOpacity onPress={() => { setSearch(''); clearFilters(); }}
-                  className="px-4 py-2 rounded-xl border border-gray-200 mt-1">
+                <TouchableOpacity
+                  onPress={() => { setSearch(''); clearFilters(); }}
+                  className="px-4 py-2 rounded-xl border border-gray-200 mt-1"
+                >
                   <Text className="text-gray-500 text-sm">Limpiar búsqueda</Text>
                 </TouchableOpacity>
               )}
