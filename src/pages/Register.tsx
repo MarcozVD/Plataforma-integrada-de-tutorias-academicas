@@ -1,3 +1,22 @@
+/**
+ * ════════════════════════════════════════════════════════════════════════════════
+ * PÁGINA: REGISTER
+ * ════════════════════════════════════════════════════════════════════════════════
+ * 
+ * PROPÓSITO:
+ *   Página de registro para nuevos usuarios (estudiantes y tutores).
+ *   Valida campos localmente antes de enviar.
+ *   POST a /auth/register/student o /auth/register/tutor según el rol.
+ * 
+ * FLUJO:
+ *   1. Usuario selecciona rol (Estudiante o Tutor)
+ *   2. Completa formulario (nombre, ID, email, carrera, contraseña, discapacidad)
+ *   3. Campos se validan localmente con validateForm()
+ *   4. Si OK: POST a backend con rol específico
+ *   5. Si éxito: navega a login
+ *   6. Si error: muestra mensaje en pantalla
+ */
+
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,6 +25,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Mail, Lock, User, ArrowRight, School, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+/**
+ * OPTIONS: Opciones de discapacidad para estudiantes
+ */
 const STUDENT_DISABILITY_OPTIONS = [
   { value: "ninguna", label: "Ninguna" },
   { value: "visual",  label: "Visual" },
@@ -14,6 +36,9 @@ const STUDENT_DISABILITY_OPTIONS = [
   { value: "cognitiva", label: "Cognitiva" },
 ];
 
+/**
+ * OPTIONS: Opciones de apoyo para tutores (tipos de discapacidad que pueden atender)
+ */
 const TUTOR_SUPPORT_OPTIONS = [
   { value: "ninguna",  label: "Ninguna en particular" },
   { value: "visual",   label: "Visual" },
@@ -23,9 +48,32 @@ const TUTOR_SUPPORT_OPTIONS = [
   { value: "todas",    label: "Todas" },
 ];
 
+/**
+ * FUNCIÓN: validateForm
+ * 
+ * PROPÓSITO: Valida los datos del formulario localmente antes de enviar
+ * 
+ * PARÁMETROS:
+ *   - formData: Objeto con todos los campos del formulario
+ * 
+ * FLUJO:
+ *   1. Crea objeto vacío de errores
+ *   2. Valida cada campo:
+ *      - fullName: No vacío, mín 3 chars, solo letras y espacios
+ *      - email: No vacío
+ *      - studentId: 5-15 dígitos numéricos
+ *      - carrera: No vacío
+ *      - password: Mín 8 chars, mayúscula, número
+ *      - confirmPassword: Debe coincidir con password
+ *   3. Retorna objeto de errores (vacío si no hay problemas)
+ * 
+ * RETORNA:
+ *   Object con claves de campo y mensajes de error
+ */
 function validateForm(formData: typeof INITIAL_STATE) {
   const errs: Record<string, string> = {};
 
+  // Validar nombre
   const name = formData.fullName.trim();
   if (!name) {
     errs.fullName = "El nombre es requerido";
@@ -35,8 +83,10 @@ function validateForm(formData: typeof INITIAL_STATE) {
     errs.fullName = "El nombre solo puede contener letras y espacios";
   }
 
+  // Validar email
   if (!formData.email) errs.email = "El correo es requerido";
 
+  // Validar ID numérica
   const id = formData.studentId.trim();
   if (!id) {
     errs.studentId = "El número de identificación es requerido";
@@ -44,8 +94,10 @@ function validateForm(formData: typeof INITIAL_STATE) {
     errs.studentId = "Debe tener entre 5 y 15 dígitos numéricos";
   }
 
+  // Validar carrera
   if (!formData.carrera) errs.carrera = "La carrera es requerida";
 
+  // Validar contraseña (reglas complejas)
   if (!formData.password) {
     errs.password = "La contraseña es requerida";
   } else if (formData.password.length < 8) {
@@ -56,12 +108,16 @@ function validateForm(formData: typeof INITIAL_STATE) {
     errs.password = "Debe contener al menos un número";
   }
 
+  // Validar confirmación de contraseña
   if (formData.password !== formData.confirmPassword)
     errs.confirmPassword = "Las contraseñas no coinciden";
 
   return errs;
 }
 
+/**
+ * ESTADO INICIAL: Estructura del formulario
+ */
 const INITIAL_STATE = {
   fullName: "", email: "", studentId: "", password: "", confirmPassword: "",
   carrera: "", userType: "student" as "student" | "tutor",
@@ -69,12 +125,38 @@ const INITIAL_STATE = {
   disabilitySupportType: "ninguna", disabilitySupportDescription: "",
 };
 
+/**
+ * COMPONENTE: Register
+ */
 const Register = () => {
+  /**
+   * HOOKS
+   */
   const navigate = useNavigate();
+
+  /**
+   * ESTADO: Datos del formulario
+   */
   const [formData, setFormData] = useState(INITIAL_STATE);
+  
+  /**
+   * ESTADO: Control de carga y errores
+   */
   const [isLoading, setIsLoading]   = useState(false);
   const [errors, setErrors]         = useState<Record<string, string>>({});
 
+  /**
+   * FUNCIÓN: handleChange
+   * 
+   * PROPÓSITO: Actualiza un campo del formulario
+   * 
+   * PARÁMETROS:
+   *   - e: Event del input/select/textarea
+   * 
+   * FLUJO:
+   *   1. Extrae name y value del event.target
+   *   2. Actualiza el campo en formData
+   */
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
@@ -82,6 +164,19 @@ const Register = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  /**
+   * FUNCIÓN: handleUserTypeChange
+   * 
+   * PROPÓSITO: Cambia el rol del usuario (student/tutor) y resetea opciones de discapacidad
+   * 
+   * PARÁMETROS:
+   *   - type: "student" | "tutor"
+   * 
+   * FLUJO:
+   *   1. Actualiza userType
+   *   2. Resetea campos de discapacidad a "ninguna"
+   *      (porque las opciones cambian según el rol)
+   */
   const handleUserTypeChange = (type: "student" | "tutor") => {
     setFormData(prev => ({
       ...prev,
@@ -91,18 +186,45 @@ const Register = () => {
     }));
   };
 
+  /**
+   * FUNCIÓN: handleSubmit
+   * 
+   * PROPÓSITO: Procesa el formulario de registro
+   * 
+   * FLUJO:
+   *   1. e.preventDefault() previene recarga
+   *   2. Valida formulario localmente
+   *   3. Si hay errores: muestra y retorna
+   *   4. Set isLoading=true
+   *   5. Prepara body según rol:
+   *      - Estudiante: incluye disability_type, disability_description
+   *      - Tutor: incluye disability_support_type, disability_support_description
+   *   6. POST a /auth/register/student o /auth/register/tutor
+   *   7. Si error: muestra mensaje
+   *   8. Si OK: navega a login (/)
+   *   9. Finalmente set isLoading=false
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validar
     const newErrors = validateForm(formData);
-    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+    if (Object.keys(newErrors).length > 0) { 
+      setErrors(newErrors); 
+      return; 
+    }
 
-    setIsLoading(true); setErrors({});
+    setIsLoading(true); 
+    setErrors({});
+    
     try {
+      // Determinar endpoint según rol
       const endpoint =
         formData.userType === "student"
           ? "/auth/register/student"
           : "/auth/register/tutor";
 
+      // Construir body según rol
       const body =
         formData.userType === "student"
           ? {
@@ -128,19 +250,24 @@ const Register = () => {
               disability_support_description: formData.disabilitySupportDescription || null,
             };
 
+      // Hacer request
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      
       const data = await response.json();
       if (!response.ok) {
+        // Backend puede retornar error como array o string
         const msg =
           Array.isArray(data.detail)
             ? data.detail.map((d: any) => d.msg).join(" · ")
             : data.detail ?? "Error al registrar usuario";
         throw new Error(msg);
       }
+      
+      // Éxito: navega a login
       navigate("/");
     } catch (error: any) {
       setErrors({ submit: error.message || "Error al conectar con el servidor" });
@@ -149,6 +276,9 @@ const Register = () => {
     }
   };
 
+  /**
+   * HELPER: Determina si es estudiante
+   */
   const isStudent = formData.userType === "student";
 
   return (

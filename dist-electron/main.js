@@ -1,70 +1,56 @@
-import { app, BrowserWindow, ipcMain } from "electron";
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
-createRequire(import.meta.url);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-process.env.APP_ROOT = path.join(__dirname, "..");
-const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
-const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
-const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
-let win;
-function createWindow() {
-  win = new BrowserWindow({
-    icon: path.join(process.env.VITE_PUBLIC, "logo-unab.svg"),
+import { app as i, BrowserWindow as r, ipcMain as d } from "electron";
+import { createRequire as p } from "node:module";
+import { fileURLToPath as w } from "node:url";
+import o from "node:path";
+p(import.meta.url);
+const t = o.dirname(w(import.meta.url));
+process.env.APP_ROOT = o.join(t, "..");
+const s = process.env.VITE_DEV_SERVER_URL, P = o.join(process.env.APP_ROOT, "dist-electron"), a = o.join(process.env.APP_ROOT, "dist");
+process.env.VITE_PUBLIC = s ? o.join(process.env.APP_ROOT, "public") : a;
+let e;
+function c() {
+  e = new r({
+    icon: o.join(process.env.VITE_PUBLIC, "logo-unab.svg"),
+    // Icono de ventana
     width: 1200,
+    // Ancho inicial
     height: 800,
-    frame: false,
-    // Quitar el marco superior del SO
+    // Alto inicial
+    frame: !1,
+    // Sin frame del SO (uso custom title bar)
     webPreferences: {
-      preload: path.join(__dirname, "preload.mjs")
-      // You can add other preferences for security as needed
+      preload: o.join(t, "preload.mjs")
+      // Script preload (acceso a IPC seguro)
+      // Más preferencias de seguridad se pueden añadir aquí
     }
-  });
-  win.webContents.on("did-finish-load", () => {
-    win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
-  });
-  win.setMenu(null);
-  if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL);
-  } else {
-    win.loadFile(path.join(RENDERER_DIST, "index.html"));
-  }
+  }), e.webContents.on("did-finish-load", () => {
+    e == null || e.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  }), e.setMenu(null), s ? e.loadURL(s) : e.loadFile(o.join(a, "index.html"));
 }
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-    win = null;
-  }
+i.on("window-all-closed", () => {
+  process.platform !== "darwin" && (i.quit(), e = null);
 });
-app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+i.on("activate", () => {
+  r.getAllWindows().length === 0 && c();
 });
-ipcMain.on("window-controls", (event, action) => {
-  const window = BrowserWindow.fromWebContents(event.sender);
-  if (!window) return;
-  switch (action) {
-    case "minimize":
-      window.minimize();
-      break;
-    case "maximize":
-      if (window.isMaximized()) {
-        window.restore();
-      } else {
-        window.maximize();
-      }
-      break;
-    case "close":
-      window.close();
-      break;
-  }
+d.on("window-controls", (l, m) => {
+  const n = r.fromWebContents(l.sender);
+  if (n)
+    switch (m) {
+      case "minimize":
+        n.minimize();
+        break;
+      case "maximize":
+        n.isMaximized() ? n.restore() : n.maximize();
+        break;
+      case "close":
+        n.close();
+        break;
+    }
 });
-app.whenReady().then(createWindow);
+i.whenReady().then(c);
 export {
-  MAIN_DIST,
-  RENDERER_DIST,
-  VITE_DEV_SERVER_URL
+  P as MAIN_DIST,
+  a as RENDERER_DIST,
+  s as VITE_DEV_SERVER_URL
 };

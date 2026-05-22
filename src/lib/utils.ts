@@ -5,7 +5,8 @@
  * 
  * PROPÓSITO:
  *   Proporciona funciones utilitarias reutilizables en toda la aplicación.
- *   Actualmente contiene la función cn() para combinar clases de Tailwind CSS.
+ *   Actualmente contiene la función cn() para combinar clases de Tailwind CSS
+ *   de forma inteligente y sin conflictos.
  * 
  * FLUJO:
  *   1. Importa clsx para combinar clases condicionalmente
@@ -24,8 +25,12 @@ import { twMerge } from "tailwind-merge";
  * 
  * PROPÓSITO: Combina múltiples clases CSS de Tailwind de forma inteligente
  * 
+ * PARÁMETROS:
+ *   - inputs: Lista de valores de clase CSS a combinar
+ *     Acepta strings, arrays, objetos, booleanos, undefined, null
+ * 
  * FLUJO:
- *   1. Recibe cualquier cantidad de valores de clase (strings, objetos, arrays)
+ *   1. Recibe cualquier cantidad de valores de clase
  *   2. clsx() los combina en un solo string, evaluando condiciones
  *   3. twMerge() resuelve conflictos de Tailwind (última clase gana)
  * 
@@ -33,6 +38,9 @@ import { twMerge } from "tailwind-merge";
  *   cn("px-2 py-1", isActive && "bg-blue-500", "text-white")
  *   // Si isActive es true: "px-2 py-1 bg-blue-500 text-white"
  *   // Si isActive es false: "px-2 py-1 text-white"
+ *   
+ *   cn("px-4", "px-2")  // Tailwind merge: "px-2" (última gana)
+ *   cn("w-full", "w-1/2")  // Result: "w-1/2"
  * 
  * @param inputs - Lista de valores de clase CSS a combinar
  * @returns String con las clases combinadas y conflictos resueltos
