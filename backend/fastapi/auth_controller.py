@@ -1,16 +1,41 @@
+"""
+╔════════════════════════════════════════════════════════════════════════════════╗
+║              CONTROLADOR DE AUTENTICACIÓN - FastAPI                            ║
+║            Gestión de registro, login, y preferencias de usuarios              ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+PROPÓSITO GENERAL:
+  Controla todo el flujo de autenticación: registro, login, recuperación de contraseña.
+  Maneja tokens JWT para mantener sesiones seguras.
+
+ENDPOINTS PRINCIPALES:
+  POST   /auth/register/student - Registro de estudiante
+  POST   /auth/register/tutor - Registro de tutor
+  POST   /auth/login - Iniciar sesión
+  GET    /auth/me - Obtener datos del usuario actual
+  POST   /auth/forgot-password - Solicitar recuperación
+  POST   /auth/reset-password - Resetear contraseña
+  PUT    /auth/preferences - Actualizar preferencias
+  PUT    /auth/disability - Actualizar discapacidad
+
+FLUJO:
+  Usuario llena formulario → Validaciones → Hash contraseña → Crea registro en BD
+  → Envía email bienvenida → Usuario puede loguear → JWT creado → API protegida
+"""
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header
 from sqlalchemy import func
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 from sqlalchemy.orm import Session, joinedload
 from db import SessionLocal
 from models import User, InterestSubject, TutoringPreference, UserDisability, TutoringSession, TutoringEnrollment, Room, RoomAvailability, PasswordResetToken, WaitlistEntry, TutorRating
-import bcrypt
-import secrets
+import bcrypt  # Hashing de contraseñas
+import secrets  # Generación de tokens aleatorios
 import traceback
 from fastapi.responses import JSONResponse
 import os
 import re
-from jose import jwt
+from jose import jwt  # JSON Web Tokens para autenticación
 from dotenv import load_dotenv
 from typing import Literal
 from datetime import datetime, timedelta
@@ -23,22 +48,43 @@ from email_service import (
     email_waitlist_spot_available,
 )
 
-load_dotenv()
+# ════════════════════════════════════════════════════════════════════════════════
+# CONFIGURACIÓN DE SEGURIDAD (JWT)
+# ════════════════════════════════════════════════════════════════════════════════
+
+load_dotenv()  # Carga variables de entorno
+
+# Clave secreta para firmar tokens JWT (cambiar en producción)
 SECRET_KEY = os.getenv("XOsFw_ir9cwCC-liLKURVCFUPPKc7BOYzytN-CvurYA", "please-change-me")
-ALGORITHM = "HS256"
+ALGORITHM = "HS256"  # Algoritmo para firmar JWT
 
 router = APIRouter()
 
+# ════════════════════════════════════════════════════════════════════════════════
+# FUNCIONES AUXILIARES: Hash y verificación de contraseñas
+# ════════════════════════════════════════════════════════════════════════════════
+
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
+    """
+    PROPÓSITO: Hash seguro de contraseña con bcrypt
+    FLUJO: Contraseña → bcrypt con salt → Hash almacenable
+    NUNCA se debe almacenar contraseña en texto plano
+    """
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against a hashed password."""
+    """
+    PROPÓSITO: Verifica si contraseña ingresada coincide con hash en BD
+    RETORNA: True si coincide, False si no
+    """
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 
 def get_db():
+    """
+    PROPÓSITO: Dependency que proporciona sesión de BD a cada ruta
+    FLUJO: Crea sesión → Ruta usa sesión → Cierra sesión al terminar
+    """
     db = SessionLocal()
     try:
         yield db
@@ -46,9 +92,23 @@ def get_db():
         db.close()
 
 
+# ════════════════════════════════════════════════════════════════════════════════
+# MODELOS PYDANTIC: Esquemas de validación para requests/responses
+# ════════════════════════════════════════════════════════════════════════════════
+
 class _BaseRegister(BaseModel):
+    """
+    PROPÓSITO: Base común para validaciones de registro (estudiante y tutor)
+    
+    VALIDACIONES:
+      - full_name: Mínimo 3 chars, solo letras y espacios
+      - university_id: 5-15 dígitos numéricos (código de estudiante)
+      - password: Mín 8 chars, mayúscula, número
+      - carrera: Mínimo 2 caracteres
+      - Confirmación: password == confirm_password
+    """
     full_name: str
-    email: EmailStr
+    email: EmailStr  # Validación de email automática
     password: str
     confirm_password: str
     university_id: str
@@ -57,6 +117,7 @@ class _BaseRegister(BaseModel):
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, v: str) -> str:
+        """Valida que nombre contenga solo letras y espacios (incluyendo acentos)"""
         v = v.strip()
         if len(v) < 3:
             raise ValueError("El nombre completo debe tener al menos 3 caracteres")
@@ -67,6 +128,7 @@ class _BaseRegister(BaseModel):
     @field_validator("university_id")
     @classmethod
     def validate_university_id(cls, v: str) -> str:
+        """Valida que ID sea número de 5-15 dígitos"""
         v = v.strip()
         if not re.match(r"^\d{5,15}$", v):
             raise ValueError("El número de identificación debe tener entre 5 y 15 dígitos numéricos")
@@ -75,6 +137,7 @@ class _BaseRegister(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
+        """Valida que contraseña cumpla requisitos de seguridad"""
         if len(v) < 8:
             raise ValueError("La contraseña debe tener al menos 8 caracteres")
         if not any(c.isupper() for c in v):
@@ -86,6 +149,7 @@ class _BaseRegister(BaseModel):
     @field_validator("carrera")
     @classmethod
     def validate_carrera(cls, v: str) -> str:
+        """Valida que carrera tenga mínimo 2 caracteres"""
         v = v.strip()
         if len(v) < 2:
             raise ValueError("La carrera debe tener al menos 2 caracteres")
@@ -93,32 +157,45 @@ class _BaseRegister(BaseModel):
 
     @model_validator(mode="after")
     def check_passwords_match(self) -> "_BaseRegister":
+        """Valida que password y confirm_password coincidan"""
         if self.password != self.confirm_password:
             raise ValueError("Las contraseñas no coinciden")
         return self
 
 
 class StudentRegisterIn(_BaseRegister):
-    """Registro para estudiantes: incluye la discapacidad que el estudiante tiene."""
+    """
+    PROPÓSITO: Schema de registro para ESTUDIANTES
+    CAMPO ESPECIAL:
+      - disability_type: "ninguna", "visual", "auditiva", "motriz", "cognitiva"
+      - disability_description: Descripción de necesidades (opcional)
+    """
     user_type: Literal["student"] = "student"
     disability_type: Literal["ninguna", "visual", "auditiva", "motriz", "cognitiva"]
     disability_description: str | None = None
 
 
 class TutorRegisterIn(_BaseRegister):
-    """Registro para tutores: incluye la discapacidad que el tutor puede atender."""
+    """
+    PROPÓSITO: Schema de registro para TUTORES
+    CAMPO ESPECIAL:
+      - disability_support_type: Qué discapacidades puede atender el tutor
+      - disability_support_description: Detalles del soporte que puede dar
+    """
     user_type: Literal["tutor"] = "tutor"
     disability_support_type: Literal["ninguna", "visual", "auditiva", "motriz", "cognitiva", "todas"]
     disability_support_description: str | None = None
 
 
 class RoomAvailabilityIn(BaseModel):
-    day: str | None = None
-    specific_date: str | None = None # YYYY-MM-DD
-    start_time: str
-    end_time: str
+    """Schema para disponibilidad de aula"""
+    day: str | None = None  # "Lunes", "Martes", etc.
+    specific_date: str | None = None  # "2024-05-22"
+    start_time: str  # "08:00"
+    end_time: str  # "18:00"
 
 class RoomIn(BaseModel):
+    """Schema para crear aula"""
     name: str
     building: str
     capacity: int = 30
@@ -129,9 +206,13 @@ class RoomIn(BaseModel):
 
 
 class TokenOut(BaseModel):
-    access_token: str
+    """
+    PROPÓSITO: Response del login - contiene JWT y datos del usuario
+    Se retorna después de validar credenciales
+    """
+    access_token: str  # Token JWT a usar en Authorization header
     token_type: str = "bearer"
-    user_type: str = "student"
+    user_type: str  # "student", "tutor", "admin"
     full_name: str = ""
     university_id: str = ""
     email: str = ""
@@ -139,59 +220,89 @@ class TokenOut(BaseModel):
 
 
 class UpdatePreferencesIn(BaseModel):
-    interest_subjects: list[str] | None = None
-    tutoring_preferences: dict | None = None
+    """Schema para actualizar preferencias del usuario"""
+    interest_subjects: list[str] | None = None  # ["Cálculo", "Física"]
+    tutoring_preferences: dict | None = None  # {"morning": true, "afternoon": false}
 
 
 class UpdateDisabilityIn(BaseModel):
+    """Schema para actualizar información de discapacidad"""
     disability_type: str | None = None
     disability_description: str | None = None
 
 
 class CreateTutoringSessionIn(BaseModel):
+    """Schema para crear sesión de tutoría"""
     subject: str
-    date_time: str  # ISO string
-    duration: int = 60
-    spots: int = 5
+    date_time: str  # ISO format: "2024-05-22T14:00"
+    duration: int = 60  # Minutos
+    spots: int = 5  # Cantidad máxima de estudiantes
     room: str | None = None
-    accessibility_type: str | None = None
-    recurrence_weeks: int = 0  # 0 = no recurrence, N = repeat N additional weeks
+    accessibility_type: str | None = None  # "wheelchair,visual"
+    recurrence_weeks: int = 0  # 0 = una sola sesión, N = repetir N semanas
 
+
+# ════════════════════════════════════════════════════════════════════════════════
+# FUNCIONES AUXILIARES: Operaciones comunes de registro
+# ════════════════════════════════════════════════════════════════════════════════
 
 def _commit_user(user, db: Session, role: str) -> dict:
+    """
+    PROPÓSITO: Confirma y guarda usuario en BD
+    FLUJO: Commit → Refresh del objeto → Retorna datos del usuario
+    Maneja excepciones y rollback si falla
+    """
     try:
-        db.commit()
-        db.refresh(user)
+        db.commit()  # Confirma la transacción
+        db.refresh(user)  # Recarga datos desde BD (obtiene ID autogenerado)
         print(f"[auth] Created {role} id={user.id} university_id={user.university_id}")
         return {"id": user.id, "university_id": user.university_id, "email": user.email,
                 "full_name": user.full_name, "user_type": user.user_type}
     except Exception as e:
-        db.rollback()
+        db.rollback()  # Deshace cambios si hay error
         tb = traceback.format_exc()
         print(f"[auth] ERROR creating {role}:", e)
         return JSONResponse(status_code=500, content={"error": str(e), "trace": tb.splitlines()[-3:]})
 
 
 def _save_user(payload: _BaseRegister, user_type: str, db: Session):
-    """Adds user to session after checking duplicates. Caller adds disability row then calls _commit_user."""
+    """
+    PROPÓSITO: Crea objeto User y lo añade a sesión (sin commit)
+    
+    FLUJO:
+      1. Valida que no exista usuario con mismo university_id
+      2. Valida que no exista usuario con mismo email
+      3. Hash la contraseña
+      4. Crea objeto User
+      5. Lo añade a sesión
+      
+    NOTA: El caller es responsable de:
+      - Crear registros de discapacidad si aplica
+      - Llamar a _commit_user() para persistir cambios
+    """
     print(f"[auth] Register attempt: university_id={payload.university_id}, email={payload.email}")
 
+    # Verifica university_id único
     if db.query(User).filter(User.university_id == payload.university_id).first():
         raise HTTPException(status_code=400, detail="El número de identificación académica ya está registrado")
 
+    # Verifica email único
     if db.query(User).filter(User.email == payload.email.lower()).first():
         raise HTTPException(status_code=400, detail="El correo ya está registrado")
 
+    # Hash contraseña con bcrypt
     hashed = hash_password(payload.password)
+    
+    # Crea objeto User (no guardado aún)
     user = User(
         university_id=payload.university_id,
         full_name=payload.full_name,
-        email=payload.email.lower(),
+        email=payload.email.lower(),  # Normaliza a minúsculas
         hashed_password=hashed,
         user_type=user_type,
         carrera=payload.carrera,
     )
-    db.add(user)
+    db.add(user)  # Añade a sesión
     return user
 
 
